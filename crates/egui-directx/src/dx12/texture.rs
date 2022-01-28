@@ -12,8 +12,7 @@ use gpu_allocator::{
 };
 use windows::Win32::Graphics::{
     Direct3D12::{
-        ID3D12Device, ID3D12GraphicsCommandList, ID3D12Heap, ID3D12Resource,
-        D3D12_GPU_DESCRIPTOR_HANDLE, D3D12_PLACED_SUBRESOURCE_FOOTPRINT, D3D12_RESOURCE_DESC,
+        ID3D12Device, ID3D12GraphicsCommandList, ID3D12Heap, ID3D12Resource, D3D12_PLACED_SUBRESOURCE_FOOTPRINT, D3D12_RESOURCE_DESC,
         D3D12_RESOURCE_DIMENSION_BUFFER, D3D12_RESOURCE_DIMENSION_TEXTURE2D,
         D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_GENERIC_READ,
         D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
@@ -24,7 +23,7 @@ use windows::Win32::Graphics::{
         D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT, D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
         D3D12_TEXTURE_LAYOUT_ROW_MAJOR, D3D12_SRV_DIMENSION_TEXTURE2D,
     },
-    Dxgi::Common::{DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_UNKNOWN, DXGI_SAMPLE_DESC},
+    Dxgi::Common::{DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, DXGI_FORMAT_UNKNOWN, DXGI_SAMPLE_DESC},
 };
 
 use super::{
@@ -57,7 +56,7 @@ impl Texture {
                 Height: height,
                 DepthOrArraySize: 1,
                 MipLevels: 1,
-                Format: DXGI_FORMAT_R8G8B8A8_UNORM,
+                Format: DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
                 SampleDesc: DXGI_SAMPLE_DESC {
                     Count: 1,
                     Quality: 0,
@@ -67,13 +66,13 @@ impl Texture {
 
             let allocation = unsafe {
                 let mut allocator = allocator.lock().unwrap();
-                allocator
-                    .allocate(&AllocationCreateDesc::from_d3d12_resource_desc(
-                        mem::transmute(device.clone()),
-                        mem::transmute(&desc),
-                        "texture",
-                        MemoryLocation::CpuToGpu,
-                    ))
+                let desc = AllocationCreateDesc::from_d3d12_resource_desc(
+                    allocator.device(),
+                    mem::transmute(&desc),
+                    "texture",
+                    MemoryLocation::CpuToGpu,
+                );
+                allocator.allocate(&desc)
                     .context("failed to allocate texture")?
             };
 
@@ -130,9 +129,9 @@ impl Texture {
 
             unsafe {
                 device.CreateShaderResourceView(
-                    &texture_resource.handle(),
+                    texture_resource.handle(),
                     &D3D12_SHADER_RESOURCE_VIEW_DESC {
-                        Format: DXGI_FORMAT_R8G8B8A8_UNORM,
+                        Format: DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
                         ViewDimension: D3D12_SRV_DIMENSION_TEXTURE2D,
                         Shader4ComponentMapping: d3d12_default_shader_4_component_mapping(),
                         Anonymous: D3D12_SHADER_RESOURCE_VIEW_DESC_0 {
@@ -186,15 +185,17 @@ impl Texture {
             };
 
             let allocation = unsafe {
+                let device = device.clone();
                 let mut allocator = allocator.lock().unwrap();
+                let desc = AllocationCreateDesc::from_d3d12_resource_desc(
+                    allocator.device(),
+                    mem::transmute(&desc),
+                    "upload",
+                    MemoryLocation::CpuToGpu,
+                );
                 allocator
-                    .allocate(&AllocationCreateDesc::from_d3d12_resource_desc(
-                        mem::transmute(device.clone()),
-                        mem::transmute(&desc),
-                        "upload",
-                        MemoryLocation::CpuToGpu,
-                    ))
-                    .context("failed to allocate texture")?
+                    .allocate(&desc)
+                    .context("failed to allocate upload buffer")?
             };
 
             let handle = unsafe {
@@ -245,8 +246,8 @@ impl Texture {
 
     pub fn bind(&mut self, command_list: &ID3D12GraphicsCommandList) -> Result<()> {
         if let Some(pixels) = self.data.take() {
-            let texture_resource = &self.texture_resource.handle();
-            let upload_resource = &self.upload_resource.handle();
+            let texture_resource = self.texture_resource.handle();
+            let upload_resource = self.upload_resource.handle();
             let layout = &self.layout;
     
             unsafe {
@@ -273,14 +274,16 @@ impl Texture {
                 self.upload_resource.handle().Unmap(0, std::ptr::null())
             };
     
+            let dst_resource = texture_resource.clone();
             let dst = D3D12_TEXTURE_COPY_LOCATION {
-                pResource: Some(texture_resource.clone()),
+                pResource: Some(dst_resource),
                 Type: D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
                 ..Default::default()
             };
-    
+
+            let src_resource = upload_resource.clone();
             let src = D3D12_TEXTURE_COPY_LOCATION {
-                pResource: Some(upload_resource.clone()),
+                pResource: Some(src_resource),
                 Type: D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
                 Anonymous: D3D12_TEXTURE_COPY_LOCATION_0 {
                     PlacedFootprint: D3D12_PLACED_SUBRESOURCE_FOOTPRINT {
@@ -289,22 +292,24 @@ impl Texture {
                     },
                 }
             };
+
+            resource_transition(
+                command_list,
+                texture_resource.clone(),
+                D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+                D3D12_RESOURCE_STATE_COPY_DEST,
+            );
     
             unsafe {
-                let barriers = [resource_transition(
-                    texture_resource,
-                    D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
-                    D3D12_RESOURCE_STATE_COPY_DEST,
-                )];
-                command_list.ResourceBarrier(barriers.len() as u32, barriers.as_ptr());
                 command_list.CopyTextureRegion(&dst, 0, 0, 0, &src, std::ptr::null());
-                let barriers = [resource_transition(
-                    texture_resource,
-                    D3D12_RESOURCE_STATE_COPY_DEST,
-                    D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
-                )];
-                command_list.ResourceBarrier(barriers.len() as u32, barriers.as_ptr());
             };
+
+            resource_transition(
+                command_list,
+                texture_resource.clone(),
+                D3D12_RESOURCE_STATE_COPY_DEST,
+                D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+            );
         }
 
         unsafe {

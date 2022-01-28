@@ -50,12 +50,13 @@ impl<T> Buffer<T> {
 
         let allocation = unsafe {
             let mut allocator = allocator.lock().unwrap();
-            allocator.allocate(&AllocationCreateDesc::from_d3d12_resource_desc(
-                mem::transmute(device.clone()),
+            let desc = AllocationCreateDesc::from_d3d12_resource_desc(
+                allocator.device(),
                 mem::transmute(&desc),
                 "buffer",
                 MemoryLocation::CpuToGpu,
-            ))?
+            );
+            allocator.allocate(&desc)?
         };
 
         let handle = unsafe {
@@ -101,11 +102,17 @@ impl<T> Buffer<T> {
         })
     }
 
-    pub fn resource_handle(&self) -> ID3D12Resource {
+    pub fn resource_handle(&self) -> &ID3D12Resource {
         self.resource.handle()
     }
 
     pub fn pointer(&self) -> *mut T {
         self.pointer
+    }
+}
+
+impl<T> Drop for Buffer<T> {
+    fn drop(&mut self) {
+        unsafe { self.resource.handle().Unmap(0, std::ptr::null()) }
     }
 }

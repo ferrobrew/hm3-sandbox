@@ -6,7 +6,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Context, Result};
-use egui::{epaint::Vertex, vec2, ClippedMesh, FontImage, Image, TextureId};
+use egui::{epaint::Vertex, vec2, ClippedMesh, FontImage, TextureId};
 use gpu_allocator::d3d12::{Allocator, AllocatorCreateDesc};
 use windows::Win32::{
     Foundation::{BOOL, PSTR, RECT},
@@ -48,7 +48,6 @@ use super::{
 };
 
 #[repr(C)]
-#[derive(Clone, Copy)]
 pub struct CBuffer {
     pub screen_size_points: [f32; 2],
 }
@@ -303,9 +302,10 @@ fn create_pipeline_state(
 
 fn create_allocator(device: &ID3D12Device) -> Result<Arc<Mutex<Allocator>>> {
     Ok(unsafe {
+        let device = device.clone();
         Arc::new(Mutex::new(
             Allocator::new(&AllocatorCreateDesc {
-                device: mem::transmute(device.clone()),
+                device: mem::transmute(device),
                 debug_settings: Default::default(),
             })
             .context("Failed to create allocator")?,
@@ -458,7 +458,7 @@ impl Painter for PainterDX12 {
 
         let screen_size_pixels = vec2(self.width as f32, self.height as f32);
         let command_queue = &self.command_queue;
-        let command_list = frame_context.command_list();
+        let command_list = frame_context.command_list().clone();
 
         frame_context.begin_frame(
             &screen_size_pixels,
@@ -507,7 +507,7 @@ impl Painter for PainterDX12 {
                 let mut index_offset = 0;
                 let mut vertex_offset = 0;
 
-                texture.bind(&command_list);
+                texture.bind(&command_list)?;
 
                 for mesh in mesh.split_to_u16() {
                     frame_context.draw_meshlet(
@@ -524,5 +524,11 @@ impl Painter for PainterDX12 {
         frame_context.end_frame(command_queue, &self.pipeline_state)?;
 
         Ok(())
+    }
+}
+
+impl Drop for PainterDX12 {
+    fn drop(&mut self) {
+        self.frame_contexts.clear()
     }
 }

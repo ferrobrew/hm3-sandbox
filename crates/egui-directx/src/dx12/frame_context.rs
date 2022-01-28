@@ -13,12 +13,10 @@ use windows::{
     Win32::Graphics::{
         Direct3D::D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
         Direct3D12::{
-            ID3D12CommandAllocator, ID3D12CommandList, ID3D12CommandQueue, ID3D12DescriptorHeap,
-            ID3D12Device, ID3D12Fence, ID3D12GraphicsCommandList, ID3D12PipelineState,
-            ID3D12Resource, ID3D12RootSignature, D3D12_COMMAND_LIST_TYPE_DIRECT,
-            D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
-            D3D12_FENCE_FLAG_NONE, D3D12_GPU_DESCRIPTOR_HANDLE, D3D12_INDEX_BUFFER_VIEW,
-            D3D12_RESOURCE_BARRIER, D3D12_RESOURCE_BARRIER_0,
+            ID3D12CommandAllocator, ID3D12CommandList, ID3D12CommandQueue, ID3D12Device,
+            ID3D12Fence, ID3D12GraphicsCommandList, ID3D12PipelineState, ID3D12Resource,
+            ID3D12RootSignature, D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12_FENCE_FLAG_NONE,
+            D3D12_INDEX_BUFFER_VIEW, D3D12_RESOURCE_BARRIER, D3D12_RESOURCE_BARRIER_0,
             D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, D3D12_RESOURCE_BARRIER_FLAG_NONE,
             D3D12_RESOURCE_BARRIER_TYPE_TRANSITION, D3D12_RESOURCE_STATES,
             D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET,
@@ -30,7 +28,7 @@ use windows::{
 
 use super::{
     back_buffer::BackBuffer, buffer::Buffer, descriptor_heap::DescriptorHeap,
-    heap_resource::HeapResource, painter_dx12::CBuffer, texture::Texture,
+    heap_resource::HeapResource, painter_dx12::CBuffer,
 };
 
 pub struct FrameContext {
@@ -42,21 +40,27 @@ pub struct FrameContext {
 }
 
 pub fn resource_transition(
-    resource: &ID3D12Resource,
+    command_list: &ID3D12GraphicsCommandList,
+    resource: ID3D12Resource,
     state_before: D3D12_RESOURCE_STATES,
     state_after: D3D12_RESOURCE_STATES,
-) -> D3D12_RESOURCE_BARRIER {
-    D3D12_RESOURCE_BARRIER {
+) {
+    let resource = Some(resource);
+    let barrier = D3D12_RESOURCE_BARRIER {
         Type: D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
         Flags: D3D12_RESOURCE_BARRIER_FLAG_NONE,
         Anonymous: D3D12_RESOURCE_BARRIER_0 {
             Transition: mem::ManuallyDrop::new(D3D12_RESOURCE_TRANSITION_BARRIER {
-                pResource: Some(resource.clone()),
+                pResource: resource,
                 StateBefore: state_before,
                 StateAfter: state_after,
                 Subresource: D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
             }),
         },
+    };
+    unsafe {
+        command_list.ResourceBarrier(1, &barrier);
+        std::mem::ManuallyDrop::into_inner(barrier.Anonymous.Transition);
     }
 }
 
@@ -94,7 +98,6 @@ impl FrameContext {
                 let resource = swap_chain
                     .GetBuffer::<ID3D12Resource>(i as _)
                     .context("Failed to get buffer resource")?;
-
                 let handle = rtv_heap
                     .lock()
                     .expect("Failed to get heap lock")
@@ -115,8 +118,8 @@ impl FrameContext {
         Ok(frame_contexts)
     }
 
-    pub fn command_list(&self) -> ID3D12GraphicsCommandList {
-        self.command_list.clone()
+    pub fn command_list(&self) -> &ID3D12GraphicsCommandList {
+        &self.command_list
     }
 
     pub fn sync(&mut self, command_queue: &ID3D12CommandQueue) -> Result<()> {
@@ -138,6 +141,9 @@ impl FrameContext {
 
     fn reset_command_list(&mut self, pipeline_state: &ID3D12PipelineState) -> Result<()> {
         unsafe {
+            self.command_allocator
+                .Reset()
+                .context("Failed to resent command allocator")?;
             self.command_list
                 .Reset(&self.command_allocator, pipeline_state)
                 .context("Failed to reset command list")?;
@@ -155,8 +161,6 @@ impl FrameContext {
         constant_buffer: &Buffer<CBuffer>,
         command_queue: &ID3D12CommandQueue,
     ) -> Result<()> {
-        self.sync(command_queue)?;
-
         // Set viewport
         let viewport = D3D12_VIEWPORT {
             Width: screen_size_pixels.x,
@@ -194,27 +198,28 @@ impl FrameContext {
         }
 
         // Set up texture descriptor heap
-        let heap = Some(descriptor_heap.lock().expect("Failed to get descriptor heap lock").heap());
 
         unsafe {
-            self.command_list
-                .SetDescriptorHeaps(1, mem::transmute(&heap));
+            let heap = descriptor_heap
+                .lock()
+                .expect("Failed to get descriptor heap lock")
+                .heap()
+                .clone();
+            self.command_list.SetDescriptorHeaps(1, &Some(heap));
         }
 
         // Setup frame buffer as a render target
-        let barrier = resource_transition(
-            self.back_buffer.resource(),
+        resource_transition(
+            &self.command_list,
+            self.back_buffer.resource().clone(),
             D3D12_RESOURCE_STATE_PRESENT,
             D3D12_RESOURCE_STATE_RENDER_TARGET,
         );
 
         unsafe {
-            self.command_list.ResourceBarrier(1, &barrier);
             self.command_list
-                .OMSetRenderTargets(1, &self.back_buffer.handle(), false, ptr::null())
+                .OMSetRenderTargets(1, &self.back_buffer.handle(), false, ptr::null());
         }
-
-        self.sync(command_queue)?;
 
         Ok(())
     }
@@ -280,15 +285,12 @@ impl FrameContext {
         command_queue: &ID3D12CommandQueue,
         pipeline_state: &ID3D12PipelineState,
     ) -> Result<()> {
-        let barrier = resource_transition(
-            self.back_buffer.resource(),
+        resource_transition(
+            &self.command_list,
+            self.back_buffer.resource().clone(),
             D3D12_RESOURCE_STATE_RENDER_TARGET,
             D3D12_RESOURCE_STATE_PRESENT,
         );
-
-        unsafe {
-            self.command_list.ResourceBarrier(1, &barrier);
-        }
 
         unsafe {
             self.command_list
@@ -302,5 +304,18 @@ impl FrameContext {
         self.reset_command_list(pipeline_state)?;
 
         Ok(())
+    }
+}
+
+impl Drop for FrameContext {
+    fn drop(&mut self) {
+        unsafe {
+            self.command_list
+                .Close()
+                .expect("Failed to close command list");
+            self.command_allocator
+                .Reset()
+                .expect("Failed to release command allocator");
+        }
     }
 }

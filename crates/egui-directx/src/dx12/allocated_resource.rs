@@ -22,8 +22,8 @@ impl AllocatedResource {
         }
     }
 
-    pub fn handle(&self) -> ID3D12Resource {
-        self.handle.clone()
+    pub fn handle(&self) -> &ID3D12Resource {
+        &self.handle
     }
 }
 

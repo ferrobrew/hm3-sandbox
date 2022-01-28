@@ -78,8 +78,8 @@ impl DescriptorHeap {
         })
     }
 
-    pub fn heap(&self) -> ID3D12DescriptorHeap {
-        self.heap.clone()
+    pub fn heap(&self) -> &ID3D12DescriptorHeap {
+        &self.heap
     }
 
     pub fn allocate(&mut self) -> Result<DescriptorHandle> {
