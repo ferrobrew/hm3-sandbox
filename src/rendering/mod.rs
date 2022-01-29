@@ -181,7 +181,8 @@ pub fn present(this: IDXGISwapChain, syncinterval: u32, flags: u32) -> windows::
                 });
 
                 if let Some(command_queue) = &CURRENT_COMMAND_QUEUE {
-                    let mut painter = PainterDX12::new(device, command_queue.clone(), swap_chain).unwrap();
+                    let mut painter =
+                        PainterDX12::new(device, command_queue.clone(), swap_chain).unwrap();
                     painter.upload_egui_texture(&ctx.font_image());
                     painter.paint_meshes(ctx.tessellate(shapes), 1.0);
                 }

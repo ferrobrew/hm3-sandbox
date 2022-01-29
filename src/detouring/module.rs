@@ -1,18 +1,16 @@
-use std::collections;
-use std::convert::TryInto;
-use std::ffi::OsString;
-use std::io;
-use std::mem;
-use std::os::windows::ffi::OsStringExt;
-use std::path::Path;
-use std::slice;
-
-use windows::Win32::Foundation::{HINSTANCE, PWSTR};
-use windows::Win32::System::LibraryLoader::GetModuleFileNameW;
-use windows::Win32::System::ProcessStatus::{
-    K32EnumProcessModules, K32GetModuleInformation, MODULEINFO,
+use std::{
+    collections, convert::TryInto, ffi::OsString, io, mem, os::windows::ffi::OsStringExt,
+    path::Path, slice,
 };
-use windows::Win32::System::Threading::GetCurrentProcess;
+
+use windows::Win32::{
+    Foundation::{HINSTANCE, PWSTR},
+    System::{
+        LibraryLoader::GetModuleFileNameW,
+        ProcessStatus::{K32EnumProcessModules, K32GetModuleInformation, MODULEINFO},
+        Threading::GetCurrentProcess,
+    },
+};
 
 use anyhow::anyhow;
 
@@ -105,9 +103,7 @@ impl Module {
     }
 
     pub fn hash(&self) -> anyhow::Result<u64> {
-        use std::collections::hash_map::DefaultHasher;
-        use std::fs::File;
-        use std::hash::Hasher;
+        use std::{collections::hash_map::DefaultHasher, fs::File, hash::Hasher};
 
         struct HashWriter<T: Hasher>(T);
 

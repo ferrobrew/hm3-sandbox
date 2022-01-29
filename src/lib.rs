@@ -8,7 +8,10 @@ use crate::detouring::prelude::*;
 use c_string::c_str;
 use windows::Win32::{
     Foundation::{HWND, PSTR},
-    System::{Threading::{OpenThread, ResumeThread, THREAD_ALL_ACCESS}, Console::AllocConsole},
+    System::{
+        Console::AllocConsole,
+        Threading::{OpenThread, ResumeThread, THREAD_ALL_ACCESS},
+    },
     UI::WindowsAndMessaging::MessageBoxA,
 };
 
