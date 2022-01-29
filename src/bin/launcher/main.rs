@@ -133,8 +133,8 @@ fn main() -> Result<()> {
             Err(anyhow!("{message}"))
         };
 
-        //#[cfg(feature = "vscode-lldb")]
-        //attach_debugger(process_info.dwProcessId)?;
+        #[cfg(feature = "vscode-lldb")]
+        attach_debugger(process_info.dwProcessId)?;
 
         let process_handle = process_info.hProcess;
         let process = Process::from_handle(process_handle.0 as _, true);
