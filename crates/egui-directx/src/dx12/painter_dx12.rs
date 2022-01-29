@@ -66,6 +66,7 @@ pub struct PainterDX12 {
     vertex_buffer: Buffer<Vertex>,
     index_buffer: Buffer<u16>,
     texture: Option<Texture>,
+    texture_version: Option<u64>,
     user_textures: HashMap<u64, Texture>,
     width: u32,
     height: u32,
@@ -315,7 +316,7 @@ fn create_allocator(device: &ID3D12Device) -> Result<Arc<Mutex<Allocator>>> {
 
 fn create_buffers(
     device: &ID3D12Device,
-    allocator: Arc<Mutex<Allocator>>,
+    allocator: &Arc<Mutex<Allocator>>,
 ) -> Result<(Buffer<CBuffer>, Buffer<Vertex>, Buffer<u16>)> {
     let constant_buffer = Buffer::new(
         device,
@@ -372,8 +373,7 @@ impl PainterDX12 {
         )?;
 
         let allocator = create_allocator(&device)?;
-        let (constant_buffer, vertex_buffer, index_buffer) =
-            create_buffers(&device, allocator.clone())?;
+        let (constant_buffer, vertex_buffer, index_buffer) = create_buffers(&device, &allocator)?;
 
         let width = swap_chain_desc.BufferDesc.Width;
         let height = swap_chain_desc.BufferDesc.Height;
@@ -392,6 +392,7 @@ impl PainterDX12 {
             vertex_buffer,
             index_buffer,
             texture: None,
+            texture_version: None,
             user_textures: Default::default(),
             width,
             height,
@@ -405,11 +406,23 @@ impl Painter for PainterDX12 {
     }
 
     fn set_texture(&mut self, tex_id: u64, image: epi::Image) {
-        todo!()
+        let mut texture = Texture::new(
+            &self.device,
+            Arc::clone(&self.descriptor_heap),
+            Arc::clone(&self.allocator),
+            image.size[0] as u32,
+            image.size[1] as u32,
+        )
+        .expect("Failed to create texture");
+        texture
+            .update(image.pixels)
+            .expect("Failed to update texture");
+
+        self.user_textures.insert(tex_id, texture);
     }
 
     fn free_texture(&mut self, tex_id: u64) {
-        todo!()
+        self.user_textures.remove_entry(&tex_id);
     }
 
     fn debug_info(&self) -> String {
@@ -430,16 +443,28 @@ impl Painter for PainterDX12 {
         if create_texture {
             let width = font_image.width as u32;
             let height = font_image.height as u32;
-            let mut texture = Texture::new(
-                &self.device,
-                Arc::clone(&self.descriptor_heap),
-                Arc::clone(&self.allocator),
-                width,
-                height,
-            )
-            .expect("Failed to create egui texture");
-            texture.update(font_image.srgba_pixels(1.0).collect()).expect("Failed to set pixels");
-            self.texture = Some(texture);
+            self.texture = Some(
+                Texture::new(
+                    &self.device,
+                    Arc::clone(&self.descriptor_heap),
+                    Arc::clone(&self.allocator),
+                    width,
+                    height,
+                )
+                .expect("Failed to create egui texture"),
+            );
+        }
+
+        let texture_version = Some(font_image.version);
+
+        if self.texture_version != texture_version {
+            if let Some(texture) = &mut self.texture {
+                texture
+                    .update(font_image.srgba_pixels(1.0).collect())
+                    .expect("Failed to update pixels");
+            }
+
+            self.texture_version = texture_version;
         }
     }
 
@@ -466,7 +491,6 @@ impl Painter for PainterDX12 {
             &self.root_signature,
             &self.descriptor_heap,
             &self.constant_buffer,
-            command_queue,
         )?;
 
         for ClippedMesh(clip_rect, mesh) in clipped_meshes {
@@ -478,14 +502,18 @@ impl Painter for PainterDX12 {
                     TextureId::User(id) => self.user_textures.get_mut(&id),
                 }
             } {
+                // Transform clip rect to physical pixels:
                 let clip_min_x = pixels_per_point * clip_rect.min.x;
                 let clip_min_y = pixels_per_point * clip_rect.min.y;
                 let clip_max_x = pixels_per_point * clip_rect.max.x;
                 let clip_max_y = pixels_per_point * clip_rect.max.y;
+
+                // Make sure clip rect can fit within a `i32`:
                 let clip_min_x = clip_min_x.clamp(0.0, screen_size_pixels.x);
                 let clip_min_y = clip_min_y.clamp(0.0, screen_size_pixels.y);
                 let clip_max_x = clip_max_x.clamp(clip_min_x, screen_size_pixels.x);
                 let clip_max_y = clip_max_y.clamp(clip_min_y, screen_size_pixels.y);
+
                 let clip_min_x = clip_min_x.round() as i32;
                 let clip_min_y = clip_min_y.round() as i32;
                 let clip_max_x = clip_max_x.round() as i32;
@@ -497,9 +525,9 @@ impl Painter for PainterDX12 {
                         1,
                         &RECT {
                             left: clip_min_x,
-                            top: screen_size_pixels.y as i32 - clip_max_y,
-                            right: clip_max_x - clip_min_x,
-                            bottom: clip_max_y - clip_min_y,
+                            top: clip_min_y,
+                            right: clip_max_x,
+                            bottom: clip_max_y,
                         },
                     );
                 };

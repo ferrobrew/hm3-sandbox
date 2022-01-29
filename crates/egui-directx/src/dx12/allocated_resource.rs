@@ -30,10 +30,12 @@ impl AllocatedResource {
 impl Drop for AllocatedResource {
     fn drop(&mut self) {
         if let Some(allocation) = self.allocation.take() {
-            let mut allocator = self.allocator
+            let mut allocator = self
+                .allocator
                 .lock()
                 .expect("Failed to get lock on allocator");
-            allocator.free(allocation)
+            allocator
+                .free(allocation)
                 .expect("Failed to free allocated resource");
         }
     }

@@ -159,7 +159,6 @@ impl FrameContext {
         root_signature: &ID3D12RootSignature,
         descriptor_heap: &Arc<Mutex<DescriptorHeap>>,
         constant_buffer: &Buffer<CBuffer>,
-        command_queue: &ID3D12CommandQueue,
     ) -> Result<()> {
         // Set viewport
         let viewport = D3D12_VIEWPORT {
@@ -188,17 +187,16 @@ impl FrameContext {
                 &CBuffer {
                     screen_size_points: screen_size_points.into(),
                 },
-                constant_buffer.pointer(),
+                constant_buffer.get_ptr(0),
                 1,
             );
             self.command_list.SetGraphicsRootConstantBufferView(
                 0,
-                constant_buffer.resource_handle().GetGPUVirtualAddress(),
+                constant_buffer.handle().GetGPUVirtualAddress(),
             );
         }
 
         // Set up texture descriptor heap
-
         unsafe {
             let heap = descriptor_heap
                 .lock()
@@ -227,18 +225,21 @@ impl FrameContext {
     pub fn draw_meshlet(
         &self,
         mesh: &Mesh16,
-        index_offset: &mut u32,
-        vertex_offset: &mut u32,
+        index_offset: &mut usize,
+        vertex_offset: &mut usize,
         index_buffer: &Buffer<u16>,
         vertex_buffer: &Buffer<Vertex>,
     ) {
         // Bind and upload index buffer
         let stride = mem::size_of::<u16>();
         let size = mesh.indices.len() * stride;
-        let handle = &index_buffer.resource_handle();
+        let handle = &index_buffer.handle();
         unsafe {
-            let pointer = index_buffer.pointer().add(*index_offset as _);
-            ptr::copy_nonoverlapping(mesh.indices.as_ptr(), pointer, mesh.indices.len());
+            ptr::copy_nonoverlapping(
+                mesh.indices.as_ptr(),
+                index_buffer.get_ptr(*index_offset),
+                mesh.indices.len(),
+            );
             self.command_list
                 .IASetIndexBuffer(&D3D12_INDEX_BUFFER_VIEW {
                     BufferLocation: handle.GetGPUVirtualAddress() + *index_offset as u64,
@@ -250,10 +251,13 @@ impl FrameContext {
         // Bind and upload vertex buffer
         let stride = mem::size_of::<Vertex>();
         let size = mesh.vertices.len() * stride;
-        let handle = &vertex_buffer.resource_handle();
+        let handle = &vertex_buffer.handle();
         unsafe {
-            let pointer = vertex_buffer.pointer().add(*vertex_offset as _);
-            ptr::copy_nonoverlapping(mesh.vertices.as_ptr(), pointer, mesh.vertices.len());
+            ptr::copy_nonoverlapping(
+                mesh.vertices.as_ptr(),
+                vertex_buffer.get_ptr(*vertex_offset),
+                mesh.vertices.len(),
+            );
             self.command_list.IASetVertexBuffers(
                 0,
                 1,
@@ -276,8 +280,8 @@ impl FrameContext {
             );
         }
 
-        *index_offset += mesh.indices.len() as u32;
-        *vertex_offset += mesh.vertices.len() as u32;
+        *index_offset += mesh.indices.len();
+        *vertex_offset += mesh.vertices.len();
     }
 
     pub fn end_frame(

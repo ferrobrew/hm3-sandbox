@@ -18,14 +18,21 @@ impl BackBuffer {
         heap_resource: HeapResource,
     ) -> Self {
         unsafe {
-            device.CreateRenderTargetView(&resource, &D3D12_RENDER_TARGET_VIEW_DESC {
-                Format: format,
-                ViewDimension: D3D12_RTV_DIMENSION_TEXTURE2D,
-                ..Default::default()
-            }, heap_resource.cpu_handle());
+            device.CreateRenderTargetView(
+                &resource,
+                &D3D12_RENDER_TARGET_VIEW_DESC {
+                    Format: format,
+                    ViewDimension: D3D12_RTV_DIMENSION_TEXTURE2D,
+                    ..Default::default()
+                },
+                heap_resource.cpu_handle(),
+            );
         }
 
-        Self { resource, heap_resource }
+        Self {
+            resource,
+            heap_resource,
+        }
     }
 
     pub fn resource(&self) -> &ID3D12Resource {

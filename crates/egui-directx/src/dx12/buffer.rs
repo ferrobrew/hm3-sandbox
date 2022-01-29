@@ -20,7 +20,7 @@ use windows::Win32::Graphics::{
 use super::allocated_resource::AllocatedResource;
 
 pub struct Buffer<T> {
-    capacity: u64,
+    capacity: usize,
     resource: AllocatedResource,
     pointer: *mut T,
 }
@@ -29,13 +29,13 @@ impl<T> Buffer<T> {
     pub fn new(
         device: &ID3D12Device,
         allocator: Arc<Mutex<Allocator>>,
-        capacity: u64,
+        capacity: usize,
         state: D3D12_RESOURCE_STATES,
     ) -> Result<Buffer<T>> {
         let desc = D3D12_RESOURCE_DESC {
             Dimension: D3D12_RESOURCE_DIMENSION_BUFFER,
             Alignment: 0,
-            Width: std::mem::size_of::<T>() as u64 * capacity,
+            Width: (std::mem::size_of::<T>() * capacity) as u64,
             Height: 1,
             DepthOrArraySize: 1,
             MipLevels: 1,
@@ -102,12 +102,16 @@ impl<T> Buffer<T> {
         })
     }
 
-    pub fn resource_handle(&self) -> &ID3D12Resource {
+    pub fn handle(&self) -> &ID3D12Resource {
         self.resource.handle()
     }
 
-    pub fn pointer(&self) -> *mut T {
-        self.pointer
+    pub fn get_ptr(&self, offset: usize) -> *mut T {
+        if offset >= self.capacity {
+            panic!("Attempted to index out of bounds buffer object");
+        }
+
+        unsafe { self.pointer.add(offset) }
     }
 }
 

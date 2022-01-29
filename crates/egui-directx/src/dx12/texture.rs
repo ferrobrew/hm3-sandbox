@@ -12,16 +12,16 @@ use gpu_allocator::{
 };
 use windows::Win32::Graphics::{
     Direct3D12::{
-        ID3D12Device, ID3D12GraphicsCommandList, ID3D12Heap, ID3D12Resource, D3D12_PLACED_SUBRESOURCE_FOOTPRINT, D3D12_RESOURCE_DESC,
-        D3D12_RESOURCE_DIMENSION_BUFFER, D3D12_RESOURCE_DIMENSION_TEXTURE2D,
-        D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_GENERIC_READ,
-        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+        ID3D12Device, ID3D12GraphicsCommandList, ID3D12Heap, ID3D12Resource,
+        D3D12_PLACED_SUBRESOURCE_FOOTPRINT, D3D12_RESOURCE_DESC, D3D12_RESOURCE_DIMENSION_BUFFER,
+        D3D12_RESOURCE_DIMENSION_TEXTURE2D, D3D12_RESOURCE_STATE_COPY_DEST,
+        D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
         D3D12_SHADER_COMPONENT_MAPPING_ALWAYS_SET_BIT_AVOIDING_ZEROMEM_MISTAKES,
         D3D12_SHADER_COMPONENT_MAPPING_MASK, D3D12_SHADER_COMPONENT_MAPPING_SHIFT,
-        D3D12_SHADER_RESOURCE_VIEW_DESC, D3D12_SHADER_RESOURCE_VIEW_DESC_0, D3D12_TEX2D_SRV,
-        D3D12_TEXTURE_COPY_LOCATION, D3D12_TEXTURE_COPY_LOCATION_0,
-        D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT, D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
-        D3D12_TEXTURE_LAYOUT_ROW_MAJOR, D3D12_SRV_DIMENSION_TEXTURE2D,
+        D3D12_SHADER_RESOURCE_VIEW_DESC, D3D12_SHADER_RESOURCE_VIEW_DESC_0,
+        D3D12_SRV_DIMENSION_TEXTURE2D, D3D12_TEX2D_SRV, D3D12_TEXTURE_COPY_LOCATION,
+        D3D12_TEXTURE_COPY_LOCATION_0, D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
+        D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX, D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
     },
     Dxgi::Common::{DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, DXGI_FORMAT_UNKNOWN, DXGI_SAMPLE_DESC},
 };
@@ -38,7 +38,7 @@ pub struct Texture {
     resource_view: HeapResource,
     upload_resource: AllocatedResource,
     layout: D3D12_PLACED_SUBRESOURCE_FOOTPRINT,
-    data: Option<Vec<Color32>>, 
+    data: Option<Vec<Color32>>,
 }
 
 impl Texture {
@@ -72,7 +72,8 @@ impl Texture {
                     "texture",
                     MemoryLocation::CpuToGpu,
                 );
-                allocator.allocate(&desc)
+                allocator
+                    .allocate(&desc)
                     .context("failed to allocate texture")?
             };
 
@@ -185,7 +186,6 @@ impl Texture {
             };
 
             let allocation = unsafe {
-                let device = device.clone();
                 let mut allocator = allocator.lock().unwrap();
                 let desc = AllocationCreateDesc::from_d3d12_resource_desc(
                     allocator.device(),
@@ -249,31 +249,32 @@ impl Texture {
             let texture_resource = self.texture_resource.handle();
             let upload_resource = self.upload_resource.handle();
             let layout = &self.layout;
-    
+
             unsafe {
                 let mut dst: *mut u8 = std::ptr::null_mut();
-    
+
                 self.upload_resource
                     .handle()
-                    .Map(0, std::ptr::null(), mem::transmute(&mut dst)).context("Failed to map resource")?;
-    
+                    .Map(0, std::ptr::null(), mem::transmute(&mut dst))
+                    .context("Failed to map resource")?;
+
                 let dst = dst.add(layout.Offset as usize);
                 let src = pixels.as_ptr() as *const u8;
-    
+
                 for y in 0..layout.Footprint.Height {
                     let dst = dst.add((y * layout.Footprint.RowPitch) as usize);
                     let src = src.add((y * layout.Footprint.Width * 4) as usize);
-    
+
                     std::ptr::copy_nonoverlapping(
                         src,
                         dst as *mut u8,
                         (layout.Footprint.Width * 4) as usize,
                     );
                 }
-    
+
                 self.upload_resource.handle().Unmap(0, std::ptr::null())
             };
-    
+
             let dst_resource = texture_resource.clone();
             let dst = D3D12_TEXTURE_COPY_LOCATION {
                 pResource: Some(dst_resource),
@@ -290,7 +291,7 @@ impl Texture {
                         Footprint: self.layout.Footprint,
                         Offset: 0,
                     },
-                }
+                },
             };
 
             resource_transition(
@@ -299,7 +300,7 @@ impl Texture {
                 D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
                 D3D12_RESOURCE_STATE_COPY_DEST,
             );
-    
+
             unsafe {
                 command_list.CopyTextureRegion(&dst, 0, 0, 0, &src, std::ptr::null());
             };
@@ -313,8 +314,7 @@ impl Texture {
         }
 
         unsafe {
-            command_list
-            .SetGraphicsRootDescriptorTable(1, self.resource_view.gpu_handle());
+            command_list.SetGraphicsRootDescriptorTable(1, self.resource_view.gpu_handle());
         }
 
         Ok(())
