@@ -148,7 +148,7 @@ impl Module {
         Ok(self.rel_to_abs_addr(offset))
     }
 
-    pub fn scan_for_relative_callsite(&mut self, pattern: &str) -> anyhow::Result<*mut u8> {
+    pub fn scan_for_relative_callsite(&self, pattern: &str, addr_offset: usize) -> anyhow::Result<*mut u8> {
         let offset = if let Some(offset) = self
             .cache
             .get(&CacheKey::RelativeCallsite(pattern.to_owned()))
@@ -157,16 +157,13 @@ impl Module {
         } else {
             let offset = patternscan::scan_first_match(io::Cursor::new(self.as_bytes()), pattern)?
                 .ok_or_else(|| anyhow!("failed to scan"))?;
-            let base = self.rel_to_abs_addr(offset);
-            let call = unsafe { slice::from_raw_parts(base as *const u8, 5) };
-            let offset = i32::from_ne_bytes(call[1..].try_into()?) + 5;
+            let base = self.rel_to_abs_addr(offset + addr_offset);
+            let call = unsafe { slice::from_raw_parts(base as *const u8, 4) };
+            let offset = i32::from_ne_bytes(call.try_into()?) + 4;
             let ptr = unsafe { base.offset(offset as isize) };
 
             self.abs_to_rel_addr(ptr).try_into()?
         };
-
-        self.cache
-            .insert(CacheKey::RelativeCallsite(pattern.to_owned()), offset);
 
         Ok(self.rel_to_abs_addr(offset))
     }

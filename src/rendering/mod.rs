@@ -1,8 +1,8 @@
-use crate::detouring::prelude::*;
+use crate::{detouring::prelude::*, game::zrender::RENDER_MANAGER};
 use anyhow::Result;
 use egui::Color32;
 use egui_directx::{self, Painter, PainterDX12};
-use std::ptr;
+use std::{mem, ptr};
 use windows::{
     core::{Interface, HRESULT},
     Win32::{
@@ -57,7 +57,7 @@ fn get_vtables() -> Result<VTables> {
     unsafe {
         let mut flags = 0;
 
-        #[cfg(debug_assertions)]
+        #[cfg(feature = "debug-logging")]
         {
             let mut debug: Option<ID3D12Debug> = None;
             if let Some(debug) = D3D12GetDebugInterface(&mut debug).ok().and(debug) {
@@ -148,16 +148,15 @@ static_detour! {
     pub static EXECUTE_COMMAND_LISTS:  extern "system" fn(ID3D12CommandQueue, u32, *const *mut ID3D12CommandList);
 }
 
+static mut PAINTER: Option<PainterDX12> = None;
 static mut CURRENT_COMMAND_QUEUE: Option<ID3D12CommandQueue> = None;
 
 pub fn present(this: IDXGISwapChain, syncinterval: u32, flags: u32) -> windows::core::HRESULT {
-    #[cfg(debug_assertions)]
+    #[cfg(feature = "debug-logging")]
     println!("present(syncinterval: {}, flags: {})", syncinterval, flags);
     unsafe {
         if let Ok(swap_chain) = this.cast::<IDXGISwapChain4>() {
             if let Ok(device) = swap_chain.GetDevice::<ID3D12Device>() {
-                println!("device: {:?}", device);
-
                 let input = egui::RawInput::default();
                 let mut ctx = egui::CtxRef::default();
                 let (output, shapes) = ctx.run(input, |ctx| {
@@ -180,11 +179,17 @@ pub fn present(this: IDXGISwapChain, syncinterval: u32, flags: u32) -> windows::
                         });
                 });
 
-                if let Some(command_queue) = &CURRENT_COMMAND_QUEUE {
-                    let mut painter =
-                        PainterDX12::new(device, command_queue.clone(), swap_chain).unwrap();
-                    painter.upload_egui_texture(&ctx.font_image());
-                    painter.paint_meshes(ctx.tessellate(shapes), 1.0);
+                if let Some(render_manager) = RENDER_MANAGER {
+                    if PAINTER.is_none() {
+                        let command_queue =
+                            &(*(*render_manager).device).command_queues[0].command_queue;
+                        PAINTER = PainterDX12::new(device, command_queue.clone(), swap_chain).ok();
+                    }
+
+                    if let Some(painter) = &mut PAINTER {
+                        painter.upload_egui_texture(&ctx.font_image());
+                        painter.paint_meshes(ctx.tessellate(shapes), 1.0);
+                    }
                 }
             }
         }
@@ -200,18 +205,36 @@ pub fn resize_buffers(
     newformat: DXGI_FORMAT,
     swapchainflags: u32,
 ) -> HRESULT {
-    #[cfg(debug_assertions)]
+    #[cfg(feature = "debug-logging")]
     println!(
         "resize_buffers(buffercount: {}, width: {}, height: {}, newformat: {}, swapchainflags: {})",
         buffercount, width, height, newformat, swapchainflags
     );
+
     unsafe {
-        RESIZE_BUFFERS_DETOUR.call(this, buffercount, width, height, newformat, swapchainflags)
+        let detour = || {
+            RESIZE_BUFFERS_DETOUR.call(
+                this.clone(),
+                buffercount,
+                width,
+                height,
+                newformat,
+                swapchainflags,
+            )
+        };
+
+        if let Some(painter) = &mut PAINTER {
+            painter
+                .resize_buffers(&detour)
+                .expect("Failed to resize buffers")
+        } else {
+            detour()
+        }
     }
 }
 
 pub fn resize_target(this: IDXGISwapChain, pnewtargetparameters: *const DXGI_MODE_DESC) -> HRESULT {
-    #[cfg(debug_assertions)]
+    #[cfg(feature = "debug-logging")]
     println!(
         "resize_target(pnewtargetparameters: 0x{:X})",
         pnewtargetparameters as usize
@@ -224,7 +247,7 @@ pub fn execute_command_lists(
     num_command_lists: u32,
     command_lists: *const *mut ID3D12CommandList,
 ) {
-    #[cfg(debug_assertions)]
+    #[cfg(feature = "debug-logging")]
     println!(
         "execute_command_lists(num_command_lists: {}, command_lists: 0x{:X})",
         num_command_lists, command_lists as usize
@@ -264,6 +287,6 @@ pub fn hook(module: &Module) -> Result<()> {
         )?;
         EXECUTE_COMMAND_LISTS.enable()?;
     }
-
+    println!("Detoured rendering");
     Ok(())
 }

@@ -1,4 +1,4 @@
-use std::{env, mem, ptr};
+use std::{env, mem, ptr, os::windows::prelude::FromRawHandle};
 
 use anyhow::{anyhow, Context, Result};
 use detour::Function;
@@ -137,11 +137,11 @@ fn main() -> Result<()> {
         attach_debugger(process_info.dwProcessId)?;
 
         let process_handle = process_info.hProcess;
-        let process = Process::from_handle(process_handle.0 as _, true);
+        let process = Process::from_raw_handle(process_handle.0 as _);
         let payload = env::current_exe()?.parent().unwrap().join("payload.dll");
 
         if let Ok(module) = Syringe::new().inject(&process, payload) {
-            let module_handle = HINSTANCE(module.payload().handle() as _);
+            let module_handle = unsafe { mem::transmute(module.handle()) };
 
             if let Err(initialization_error) =
                 initialize_module(process_handle, module_handle, process_info.dwThreadId)

@@ -7,7 +7,7 @@ use std::{
 
 use anyhow::{anyhow, Context, Result};
 use egui::{epaint::Vertex, vec2, ClippedMesh, FontImage, TextureId};
-use windows::Win32::{
+use windows::{Win32::{
     Foundation::{BOOL, PSTR, RECT},
     Graphics::{
         Direct3D::{Fxc::D3DCompile2, ID3DBlob},
@@ -38,7 +38,7 @@ use windows::Win32::{
             IDXGISwapChain4,
         },
     },
-};
+}, core::HRESULT};
 
 use super::{
     super::painter::Painter, buffer::Buffer, descriptor_heap::DescriptorHeap,
@@ -301,8 +301,8 @@ fn create_pipeline_state(
 fn create_buffers(device: &ID3D12Device) -> Result<(Buffer<CBuffer>, Buffer<Vertex>, Buffer<u16>)> {
     Ok((
         Buffer::new(device, 1)?,
-        Buffer::new(device, 1)?,
-        Buffer::new(device, 65536)?,
+        Buffer::new(device, 16384)?,
+        Buffer::new(device, 8192)?,
     ))
 }
 
@@ -511,6 +511,26 @@ impl Painter for PainterDX12 {
         frame_context.end_frame(command_queue, &self.pipeline_state)?;
 
         Ok(())
+    }
+
+    fn resize_buffers<F, R>(&mut self, callback: F) -> Result<R>
+        where F: FnOnce() -> R
+    {
+        self.frame_contexts.clear();
+        let result = callback();
+        let swap_chain_desc = unsafe {
+            self.swap_chain
+                .GetDesc()
+                .context("Failed to get swap chain description")?
+        };
+        self.frame_contexts = FrameContext::new(
+            &self.device,
+            &self.pipeline_state,
+            &self.swap_chain,
+            &swap_chain_desc,
+            &self.rtv_heap,
+        )?;
+        Ok(result)
     }
 }
 

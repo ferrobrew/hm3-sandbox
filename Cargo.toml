@@ -8,14 +8,20 @@ name = "payload"
 crate-type = ["cdylib"]
 
 [features]
-default = ["vscode-lldb"]
 vscode-lldb = []
+debug-console = []
+debug-logging = []
+default = [
+    "vscode-lldb",
+    "debug-console",
+    "debug-logging"
+]
 
 [dependencies]
 anyhow = "1.0.52"
 c_string = "0.7.2"
 detour = "0.8.1"
-dll-syringe = "0.1.2"
+dll-syringe = "0.2.1"
 egui = "0.16.1"
 lazy_static = "1.4.0"
 libc = "0.2.112"
@@ -41,6 +47,7 @@ features = [
     "Win32_Security",
     "Win32_System_Console",
     "Win32_System_Diagnostics_Debug",
+    "Win32_System_Kernel",
     "Win32_System_LibraryLoader",
     "Win32_System_Memory",
     "Win32_System_ProcessStatus",
@@ -50,3 +57,6 @@ features = [
     "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",
 ]
+
+[profile.dev]
+opt-level = 2

@@ -11,7 +11,7 @@ use egui::{
 use windows::{
     core::Interface,
     Win32::{
-        Foundation::{HANDLE, PWSTR, CloseHandle},
+        Foundation::{CloseHandle, HANDLE},
         Graphics::{
             Direct3D::D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
             Direct3D12::{

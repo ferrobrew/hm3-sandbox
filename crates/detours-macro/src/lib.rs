@@ -53,14 +53,14 @@ impl Args {
                     } else {
                         return Err(Error::new_spanned(
                             nv.path.clone(),
-                            format!("unknown attribute `{:?}`", nv.path),
+                            format!("unknown attribute"),
                         ));
                     }
                 }
                 arg => {
                     return Err(Error::new_spanned(
                         arg.clone(),
-                        format!("unknown attribute {:?}", arg),
+                        format!("unknown attribute"),
                     ));
                 }
             }

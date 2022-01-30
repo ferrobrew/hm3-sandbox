@@ -14,9 +14,8 @@ use windows::{
             },
             Dxgi::{
                 Common::{DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_SAMPLE_DESC},
-                CreateDXGIFactory2, DXGIGetDebugInterface1, IDXGIAdapter, IDXGIDebug1,
-                IDXGIFactory4, IDXGISwapChain4, DXGI_CREATE_FACTORY_DEBUG, DXGI_DEBUG_ALL,
-                DXGI_DEBUG_RLO_ALL, DXGI_SWAP_CHAIN_DESC1, DXGI_SWAP_EFFECT_FLIP_DISCARD,
+                CreateDXGIFactory2, IDXGIAdapter, IDXGIFactory4, IDXGISwapChain4,
+                DXGI_CREATE_FACTORY_DEBUG, DXGI_SWAP_CHAIN_DESC1, DXGI_SWAP_EFFECT_FLIP_DISCARD,
                 DXGI_USAGE_RENDER_TARGET_OUTPUT,
             },
         },
@@ -34,26 +33,22 @@ struct App {
     device: ID3D12Device,
     command_queue: ID3D12CommandQueue,
     swap_chain: IDXGISwapChain4,
-    dxgi_debug: Option<IDXGIDebug1>,
+    painter: PainterDX12,
 }
 
 impl App {
     fn new(window: &Window) -> Result<App> {
         let mut flags = 0;
-        let dxgi_debug;
 
-        //#[cfg(debug_assertions)]
+        #[cfg(debug_assertions)]
         unsafe {
             let mut d3d_debug = None;
 
             if D3D12GetDebugInterface::<ID3D12Debug1>(&mut d3d_debug).is_ok() {
-                let d3d_debug = d3d_debug.unwrap();
-                d3d_debug.EnableDebugLayer();
-                d3d_debug.SetEnableGPUBasedValidation(true);
+                d3d_debug.unwrap().EnableDebugLayer();
             }
 
             flags &= DXGI_CREATE_FACTORY_DEBUG;
-            dxgi_debug = Some(DXGIGetDebugInterface1::<IDXGIDebug1>(0)?);
         }
 
         unsafe {
@@ -86,21 +81,29 @@ impl App {
                 )?
                 .cast::<IDXGISwapChain4>()?;
 
+            let painter =
+                PainterDX12::new(device.clone(), command_queue.clone(), swap_chain.clone())?;
+
             Ok(App {
                 device,
                 command_queue,
                 swap_chain,
-                dxgi_debug,
+                painter,
             })
         }
     }
 
-    fn resize(&self, width: u32, height: u32) -> Result<()> {
-        unsafe { self.swap_chain.ResizeBuffers(0, width, height, 0, 0)? };
-        Ok(())
+    fn resize(&mut self, width: u32, height: u32) -> Result<()> {
+        self.painter.resize_buffers(|| {
+            unsafe {
+                self.swap_chain
+                    .ResizeBuffers(0, width, height, 0, 0)
+                    .expect("Failed to resize buffers")
+            };
+        })
     }
 
-    fn render(&self) -> Result<()> {
+    fn render(&mut self) -> Result<()> {
         let input = egui::RawInput::default();
         let mut ctx = egui::CtxRef::default();
 
@@ -124,29 +127,11 @@ impl App {
                 });
         });
 
-        unsafe {
-            if let Some(dxgi_debug) = &self.dxgi_debug {
-                dxgi_debug.EnableLeakTrackingForThread();
-            }
-        }
-
-        {
-            let mut painter = PainterDX12::new(
-                self.device.clone(),
-                self.command_queue.clone(),
-                self.swap_chain.clone(),
-            )?;
-            painter.upload_egui_texture(&ctx.font_image());
-            painter.paint_meshes(ctx.tessellate(shapes), 1.0)?;
-        }
+        self.painter.upload_egui_texture(&ctx.font_image());
+        self.painter.paint_meshes(ctx.tessellate(shapes), 1.0)?;
 
         unsafe {
             self.swap_chain.Present(1, 0).expect("Failed to present");
-
-            if let Some(dxgi_debug) = &self.dxgi_debug {
-                dxgi_debug.DisableLeakTrackingForThread();
-                dxgi_debug.ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_ALL)?;
-            }
         }
 
         Ok(())
@@ -156,7 +141,7 @@ impl App {
 fn main() -> Result<()> {
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new().build(&event_loop)?;
-    let app = App::new(&window)?;
+    let mut app = App::new(&window)?;
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Wait;

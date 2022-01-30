@@ -1,6 +1,9 @@
 pub trait Painter {
     fn name(&self) -> &'static str;
 
+    fn resize_buffers<F, R>(&mut self, callback: F) -> anyhow::Result<R>
+        where F: FnOnce() -> R;
+
     fn set_texture(&mut self, tex_id: u64, image: epi::Image);
 
     fn free_texture(&mut self, tex_id: u64);
