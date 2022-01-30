@@ -10,19 +10,23 @@ use egui::{
 };
 use windows::{
     core::Interface,
-    Win32::Graphics::{
-        Direct3D::D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
-        Direct3D12::{
-            ID3D12CommandAllocator, ID3D12CommandList, ID3D12CommandQueue, ID3D12Device,
-            ID3D12Fence, ID3D12GraphicsCommandList, ID3D12PipelineState, ID3D12Resource,
-            ID3D12RootSignature, D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12_FENCE_FLAG_NONE,
-            D3D12_INDEX_BUFFER_VIEW, D3D12_RESOURCE_BARRIER, D3D12_RESOURCE_BARRIER_0,
-            D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, D3D12_RESOURCE_BARRIER_FLAG_NONE,
-            D3D12_RESOURCE_BARRIER_TYPE_TRANSITION, D3D12_RESOURCE_STATES,
-            D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET,
-            D3D12_RESOURCE_TRANSITION_BARRIER, D3D12_VERTEX_BUFFER_VIEW, D3D12_VIEWPORT,
+    Win32::{
+        Foundation::{HANDLE, PWSTR, CloseHandle},
+        Graphics::{
+            Direct3D::D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
+            Direct3D12::{
+                ID3D12CommandAllocator, ID3D12CommandList, ID3D12CommandQueue, ID3D12Device,
+                ID3D12Fence, ID3D12GraphicsCommandList, ID3D12PipelineState, ID3D12Resource,
+                ID3D12RootSignature, D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12_FENCE_FLAG_NONE,
+                D3D12_INDEX_BUFFER_VIEW, D3D12_RESOURCE_BARRIER, D3D12_RESOURCE_BARRIER_0,
+                D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, D3D12_RESOURCE_BARRIER_FLAG_NONE,
+                D3D12_RESOURCE_BARRIER_TYPE_TRANSITION, D3D12_RESOURCE_STATES,
+                D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET,
+                D3D12_RESOURCE_TRANSITION_BARRIER, D3D12_VERTEX_BUFFER_VIEW, D3D12_VIEWPORT,
+            },
+            Dxgi::{Common::DXGI_FORMAT_R16_UINT, IDXGISwapChain4, DXGI_SWAP_CHAIN_DESC},
         },
-        Dxgi::{Common::DXGI_FORMAT_R16_UINT, IDXGISwapChain4, DXGI_SWAP_CHAIN_DESC},
+        System::Threading::{CreateEventA, WaitForSingleObject},
     },
 };
 
@@ -32,8 +36,9 @@ use super::{
 };
 
 pub struct FrameContext {
-    fence_value: u64,
     fence: ID3D12Fence,
+    fence_value: u64,
+    fence_event: HANDLE,
     back_buffer: BackBuffer,
     command_allocator: ID3D12CommandAllocator,
     command_list: ID3D12GraphicsCommandList,
@@ -78,10 +83,10 @@ impl FrameContext {
 
         for i in 0..capacity {
             unsafe {
-                let fence_value = 0;
                 let fence = device
-                    .CreateFence::<ID3D12Fence>(fence_value, D3D12_FENCE_FLAG_NONE)
+                    .CreateFence::<ID3D12Fence>(0, D3D12_FENCE_FLAG_NONE)
                     .context("Failed to create fence")?;
+                let fence_event = CreateEventA(ptr::null_mut(), false, false, None);
                 let command_allocator = device
                     .CreateCommandAllocator::<ID3D12CommandAllocator>(
                         D3D12_COMMAND_LIST_TYPE_DIRECT,
@@ -107,8 +112,9 @@ impl FrameContext {
                 let back_buffer = BackBuffer::new(device, resource, format, descriptor_handle);
 
                 frame_contexts.push(FrameContext {
-                    fence_value,
                     fence,
+                    fence_value: 1,
+                    fence_event,
                     back_buffer,
                     command_allocator,
                     command_list,
@@ -125,16 +131,14 @@ impl FrameContext {
 
     pub fn sync(&mut self, command_queue: &ID3D12CommandQueue) -> Result<()> {
         unsafe {
-            self.fence_value += 1;
             command_queue
                 .Signal(&self.fence, self.fence_value)
                 .context("Failed to signal fence")?;
-
-            loop {
-                if self.fence_value == self.fence.GetCompletedValue() {
-                    break;
-                }
-            }
+            self.fence
+                .SetEventOnCompletion(self.fence_value, self.fence_event)
+                .context("Failed to set fence event")?;
+            self.fence_value += 1;
+            WaitForSingleObject(self.fence_event, u32::MAX);
         }
 
         Ok(())
@@ -321,6 +325,7 @@ impl Drop for FrameContext {
             self.command_allocator
                 .Reset()
                 .expect("Failed to release command allocator");
+            CloseHandle(self.fence_event);
         }
     }
 }
