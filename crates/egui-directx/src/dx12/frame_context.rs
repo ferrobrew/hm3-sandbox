@@ -60,7 +60,7 @@ pub fn resource_transition(
     };
     unsafe {
         command_list.ResourceBarrier(1, &barrier);
-        std::mem::ManuallyDrop::into_inner(barrier.Anonymous.Transition);
+        mem::ManuallyDrop::into_inner(barrier.Anonymous.Transition);
     }
 }
 
@@ -101,7 +101,8 @@ impl FrameContext {
                 let handle = rtv_heap
                     .lock()
                     .expect("Failed to get heap lock")
-                    .allocate()?;
+                    .allocate()
+                    .context("Failed to allocate rtv heap resource")?;
                 let descriptor_handle = HeapResource::new(Arc::clone(rtv_heap), handle);
                 let back_buffer = BackBuffer::new(device, resource, format, descriptor_handle);
 

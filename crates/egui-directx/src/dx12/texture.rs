@@ -6,37 +6,33 @@ use std::{
 use anyhow::{anyhow, Context, Result};
 
 use egui::Color32;
-use gpu_allocator::{
-    d3d12::{AllocationCreateDesc, Allocator},
-    MemoryLocation,
-};
 use windows::Win32::Graphics::{
     Direct3D12::{
-        ID3D12Device, ID3D12GraphicsCommandList, ID3D12Heap, ID3D12Resource,
-        D3D12_PLACED_SUBRESOURCE_FOOTPRINT, D3D12_RESOURCE_DESC, D3D12_RESOURCE_DIMENSION_BUFFER,
-        D3D12_RESOURCE_DIMENSION_TEXTURE2D, D3D12_RESOURCE_STATE_COPY_DEST,
-        D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
-        D3D12_SHADER_COMPONENT_MAPPING_ALWAYS_SET_BIT_AVOIDING_ZEROMEM_MISTAKES,
-        D3D12_SHADER_COMPONENT_MAPPING_MASK, D3D12_SHADER_COMPONENT_MAPPING_SHIFT,
-        D3D12_SHADER_RESOURCE_VIEW_DESC, D3D12_SHADER_RESOURCE_VIEW_DESC_0,
-        D3D12_SRV_DIMENSION_TEXTURE2D, D3D12_TEX2D_SRV, D3D12_TEXTURE_COPY_LOCATION,
-        D3D12_TEXTURE_COPY_LOCATION_0, D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
-        D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX, D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+        ID3D12Device, ID3D12GraphicsCommandList, ID3D12Resource,
+        D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING, D3D12_HEAP_FLAG_NONE, D3D12_HEAP_PROPERTIES,
+        D3D12_HEAP_TYPE_DEFAULT, D3D12_HEAP_TYPE_UPLOAD, D3D12_PLACED_SUBRESOURCE_FOOTPRINT,
+        D3D12_RESOURCE_DESC, D3D12_RESOURCE_DIMENSION_BUFFER, D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+        D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_GENERIC_READ,
+        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_SHADER_RESOURCE_VIEW_DESC,
+        D3D12_SHADER_RESOURCE_VIEW_DESC_0, D3D12_SRV_DIMENSION_TEXTURE2D, D3D12_TEX2D_SRV,
+        D3D12_TEXTURE_COPY_LOCATION, D3D12_TEXTURE_COPY_LOCATION_0,
+        D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT, D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
+        D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
     },
     Dxgi::Common::{DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, DXGI_FORMAT_UNKNOWN, DXGI_SAMPLE_DESC},
 };
 
 use super::{
-    allocated_resource::AllocatedResource, descriptor_heap::DescriptorHeap,
-    frame_context::resource_transition, heap_resource::HeapResource,
+    descriptor_heap::DescriptorHeap, frame_context::resource_transition,
+    heap_resource::HeapResource,
 };
 
 pub struct Texture {
     width: u32,
     height: u32,
-    texture_resource: AllocatedResource,
+    texture_resource: ID3D12Resource,
     resource_view: HeapResource,
-    upload_resource: AllocatedResource,
+    upload_resource: ID3D12Resource,
     layout: D3D12_PLACED_SUBRESOURCE_FOOTPRINT,
     data: Option<Vec<Color32>>,
 }
@@ -45,11 +41,10 @@ impl Texture {
     pub fn new(
         device: &ID3D12Device,
         descriptor_heap: Arc<Mutex<DescriptorHeap>>,
-        allocator: Arc<Mutex<Allocator>>,
         width: u32,
         height: u32,
     ) -> Result<Texture> {
-        let texture_resource = {
+        let texture_resource = unsafe {
             let desc = D3D12_RESOURCE_DESC {
                 Dimension: D3D12_RESOURCE_DIMENSION_TEXTURE2D,
                 Width: width as _,
@@ -64,77 +59,39 @@ impl Texture {
                 ..Default::default()
             };
 
-            let allocation = unsafe {
-                let mut allocator = allocator.lock().unwrap();
-                let desc = AllocationCreateDesc::from_d3d12_resource_desc(
-                    allocator.device(),
-                    mem::transmute(&desc),
-                    "texture",
-                    MemoryLocation::CpuToGpu,
-                );
-                allocator
-                    .allocate(&desc)
-                    .context("failed to allocate texture")?
+            let props = D3D12_HEAP_PROPERTIES {
+                Type: D3D12_HEAP_TYPE_DEFAULT,
+                ..Default::default()
             };
 
-            let handle = unsafe {
-                let heap: &ID3D12Heap = mem::transmute(&allocation.heap());
-                let mut value: Option<ID3D12Resource> = None;
-                let result = device
-                    .CreatePlacedResource(
-                        heap,
-                        allocation.offset(),
-                        &desc,
-                        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
-                        ptr::null(),
-                        &mut value,
-                    )
-                    .context("failed to create placed texture resource");
-
-                if let Err(error) = result {
-                    let mut allocator = allocator.lock().unwrap();
-                    allocator.free(allocation).unwrap();
-                    return Err(error);
-                };
-
-                value.unwrap()
-            };
-
-            AllocatedResource::new(Arc::clone(&allocator), allocation, handle)
+            let mut resource: Option<ID3D12Resource> = None;
+            device
+                .CreateCommittedResource(
+                    &props,
+                    D3D12_HEAP_FLAG_NONE,
+                    &desc,
+                    D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+                    ptr::null(),
+                    &mut resource,
+                )
+                .context("failed to create committed texture resource")?;
+            resource.unwrap()
         };
 
         let resource_view = {
             let heap_handle = descriptor_heap
                 .lock()
                 .expect("Failed to get heap lock")
-                .allocate()?;
-
-            const fn d3d12_encode_shader_4_component_mapping(
-                src0: u32,
-                src1: u32,
-                src2: u32,
-                src3: u32,
-            ) -> u32 {
-                (src0 & D3D12_SHADER_COMPONENT_MAPPING_MASK)
-                    | ((src1 & D3D12_SHADER_COMPONENT_MAPPING_MASK)
-                        << (D3D12_SHADER_COMPONENT_MAPPING_SHIFT))
-                    | ((src2 & D3D12_SHADER_COMPONENT_MAPPING_MASK)
-                        << (D3D12_SHADER_COMPONENT_MAPPING_SHIFT * 2))
-                    | ((src3 & D3D12_SHADER_COMPONENT_MAPPING_MASK)
-                        << (D3D12_SHADER_COMPONENT_MAPPING_SHIFT * 3))
-                    | D3D12_SHADER_COMPONENT_MAPPING_ALWAYS_SET_BIT_AVOIDING_ZEROMEM_MISTAKES
-            }
-            const fn d3d12_default_shader_4_component_mapping() -> u32 {
-                d3d12_encode_shader_4_component_mapping(0, 1, 2, 3)
-            }
+                .allocate()
+                .context("Failed to allocate texture heap resource")?;
 
             unsafe {
                 device.CreateShaderResourceView(
-                    texture_resource.handle(),
+                    &texture_resource,
                     &D3D12_SHADER_RESOURCE_VIEW_DESC {
                         Format: DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
                         ViewDimension: D3D12_SRV_DIMENSION_TEXTURE2D,
-                        Shader4ComponentMapping: d3d12_default_shader_4_component_mapping(),
+                        Shader4ComponentMapping: D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
                         Anonymous: D3D12_SHADER_RESOURCE_VIEW_DESC_0 {
                             Texture2D: D3D12_TEX2D_SRV {
                                 MipLevels: 1,
@@ -156,7 +113,7 @@ impl Texture {
             let mut total_bytes: u64 = 0;
 
             device.GetCopyableFootprints(
-                &texture_resource.handle().GetDesc(),
+                &texture_resource.GetDesc(),
                 0,
                 layouts.len() as u32,
                 0,
@@ -169,7 +126,7 @@ impl Texture {
             (layouts[0], total_bytes)
         };
 
-        let upload_resource = {
+        let upload_resource = unsafe {
             let desc = D3D12_RESOURCE_DESC {
                 Dimension: D3D12_RESOURCE_DIMENSION_BUFFER,
                 Width: total_bytes,
@@ -185,43 +142,23 @@ impl Texture {
                 ..Default::default()
             };
 
-            let allocation = unsafe {
-                let mut allocator = allocator.lock().unwrap();
-                let desc = AllocationCreateDesc::from_d3d12_resource_desc(
-                    allocator.device(),
-                    mem::transmute(&desc),
-                    "upload",
-                    MemoryLocation::CpuToGpu,
-                );
-                allocator
-                    .allocate(&desc)
-                    .context("failed to allocate upload buffer")?
+            let props = D3D12_HEAP_PROPERTIES {
+                Type: D3D12_HEAP_TYPE_UPLOAD,
+                ..Default::default()
             };
 
-            let handle = unsafe {
-                let heap: &ID3D12Heap = mem::transmute(&allocation.heap());
-                let mut value: Option<ID3D12Resource> = None;
-                let result = device
-                    .CreatePlacedResource(
-                        heap,
-                        allocation.offset(),
-                        &desc,
-                        D3D12_RESOURCE_STATE_GENERIC_READ,
-                        ptr::null(),
-                        &mut value,
-                    )
-                    .context("failed to create placed texture resource");
-
-                if let Err(error) = result {
-                    let mut allocator = allocator.lock().unwrap();
-                    allocator.free(allocation).unwrap();
-                    return Err(error);
-                };
-
-                value.unwrap()
-            };
-
-            AllocatedResource::new(Arc::clone(&allocator), allocation, handle)
+            let mut resource: Option<ID3D12Resource> = None;
+            device
+                .CreateCommittedResource(
+                    &props,
+                    D3D12_HEAP_FLAG_NONE,
+                    &desc,
+                    D3D12_RESOURCE_STATE_GENERIC_READ,
+                    ptr::null(),
+                    &mut resource,
+                )
+                .context("failed to create committed texture resource")?;
+            resource.unwrap()
         };
 
         Ok(Texture {
@@ -246,17 +183,16 @@ impl Texture {
 
     pub fn bind(&mut self, command_list: &ID3D12GraphicsCommandList) -> Result<()> {
         if let Some(pixels) = self.data.take() {
-            let texture_resource = self.texture_resource.handle();
-            let upload_resource = self.upload_resource.handle();
+            let texture_resource = &self.texture_resource;
+            let upload_resource = &self.upload_resource;
             let layout = &self.layout;
 
             unsafe {
-                let mut dst: *mut u8 = std::ptr::null_mut();
+                let mut dst: *mut u8 = ptr::null_mut();
 
-                self.upload_resource
-                    .handle()
-                    .Map(0, std::ptr::null(), mem::transmute(&mut dst))
-                    .context("Failed to map resource")?;
+                upload_resource
+                    .Map(0, ptr::null(), mem::transmute(&mut dst))
+                    .context("Failed to map upload buffer")?;
 
                 let dst = dst.add(layout.Offset as usize);
                 let src = pixels.as_ptr() as *const u8;
@@ -265,14 +201,14 @@ impl Texture {
                     let dst = dst.add((y * layout.Footprint.RowPitch) as usize);
                     let src = src.add((y * layout.Footprint.Width * 4) as usize);
 
-                    std::ptr::copy_nonoverlapping(
+                    ptr::copy_nonoverlapping(
                         src,
                         dst as *mut u8,
                         (layout.Footprint.Width * 4) as usize,
                     );
                 }
 
-                self.upload_resource.handle().Unmap(0, std::ptr::null())
+                upload_resource.Unmap(0, ptr::null())
             };
 
             let dst_resource = texture_resource.clone();
@@ -302,7 +238,7 @@ impl Texture {
             );
 
             unsafe {
-                command_list.CopyTextureRegion(&dst, 0, 0, 0, &src, std::ptr::null());
+                command_list.CopyTextureRegion(&dst, 0, 0, 0, &src, ptr::null());
             };
 
             resource_transition(

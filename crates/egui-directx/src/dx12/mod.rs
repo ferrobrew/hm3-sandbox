@@ -1,4 +1,3 @@
-mod allocated_resource;
 mod back_buffer;
 mod buffer;
 mod descriptor_heap;

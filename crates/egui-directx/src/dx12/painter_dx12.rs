@@ -1,13 +1,12 @@
 use std::{
     collections::HashMap,
     ffi::CStr,
-    mem, ptr,
+    ptr,
     sync::{Arc, Mutex},
 };
 
 use anyhow::{anyhow, Context, Result};
 use egui::{epaint::Vertex, vec2, ClippedMesh, FontImage, TextureId};
-use gpu_allocator::d3d12::{Allocator, AllocatorCreateDesc};
 use windows::Win32::{
     Foundation::{BOOL, PSTR, RECT},
     Graphics::{
@@ -24,10 +23,9 @@ use windows::Win32::{
             D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_GRAPHICS_PIPELINE_STATE_DESC,
             D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, D3D12_INPUT_ELEMENT_DESC,
             D3D12_INPUT_LAYOUT_DESC, D3D12_LOGIC_OP_NOOP, D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
-            D3D12_RASTERIZER_DESC, D3D12_RENDER_TARGET_BLEND_DESC,
-            D3D12_RESOURCE_STATE_INDEX_BUFFER, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
-            D3D12_ROOT_PARAMETER, D3D12_ROOT_PARAMETER_TYPE_CBV,
-            D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE, D3D12_ROOT_SIGNATURE_DESC,
+            D3D12_RASTERIZER_DESC, D3D12_RENDER_TARGET_BLEND_DESC, D3D12_ROOT_PARAMETER,
+            D3D12_ROOT_PARAMETER_TYPE_CBV, D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
+            D3D12_ROOT_SIGNATURE_DESC,
             D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT, D3D12_SHADER_BYTECODE,
             D3D12_STATIC_BORDER_COLOR_OPAQUE_BLACK, D3D12_STATIC_SAMPLER_DESC,
             D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D_ROOT_SIGNATURE_VERSION_1,
@@ -61,7 +59,6 @@ pub struct PainterDX12 {
     frame_contexts: Vec<FrameContext>,
     rtv_heap: Arc<Mutex<DescriptorHeap>>,
     descriptor_heap: Arc<Mutex<DescriptorHeap>>,
-    allocator: Arc<Mutex<Allocator>>,
     constant_buffer: Buffer<CBuffer>,
     vertex_buffer: Buffer<Vertex>,
     index_buffer: Buffer<u16>,
@@ -301,45 +298,12 @@ fn create_pipeline_state(
     Ok(unsafe { device.CreateGraphicsPipelineState::<ID3D12PipelineState>(&state_desc)? })
 }
 
-fn create_allocator(device: &ID3D12Device) -> Result<Arc<Mutex<Allocator>>> {
-    Ok(unsafe {
-        let device = device.clone();
-        Arc::new(Mutex::new(
-            Allocator::new(&AllocatorCreateDesc {
-                device: mem::transmute(device),
-                debug_settings: Default::default(),
-            })
-            .context("Failed to create allocator")?,
-        ))
-    })
-}
-
-fn create_buffers(
-    device: &ID3D12Device,
-    allocator: &Arc<Mutex<Allocator>>,
-) -> Result<(Buffer<CBuffer>, Buffer<Vertex>, Buffer<u16>)> {
-    let constant_buffer = Buffer::new(
-        device,
-        allocator.clone(),
-        1,
-        D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
-    )?;
-
-    let vertex_buffer = Buffer::new(
-        device,
-        allocator.clone(),
-        65536,
-        D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
-    )?;
-
-    let index_buffer = Buffer::new(
-        device,
-        allocator.clone(),
-        65536,
-        D3D12_RESOURCE_STATE_INDEX_BUFFER,
-    )?;
-
-    Ok((constant_buffer, vertex_buffer, index_buffer))
+fn create_buffers(device: &ID3D12Device) -> Result<(Buffer<CBuffer>, Buffer<Vertex>, Buffer<u16>)> {
+    Ok((
+        Buffer::new(device, 1)?,
+        Buffer::new(device, 1)?,
+        Buffer::new(device, 65536)?,
+    ))
 }
 
 impl PainterDX12 {
@@ -371,9 +335,7 @@ impl PainterDX12 {
             &swap_chain_desc,
             &rtv_heap,
         )?;
-
-        let allocator = create_allocator(&device)?;
-        let (constant_buffer, vertex_buffer, index_buffer) = create_buffers(&device, &allocator)?;
+        let (constant_buffer, vertex_buffer, index_buffer) = create_buffers(&device)?;
 
         let width = swap_chain_desc.BufferDesc.Width;
         let height = swap_chain_desc.BufferDesc.Height;
@@ -387,7 +349,6 @@ impl PainterDX12 {
             descriptor_heap,
             root_signature,
             pipeline_state,
-            allocator,
             constant_buffer,
             vertex_buffer,
             index_buffer,
@@ -409,7 +370,6 @@ impl Painter for PainterDX12 {
         let mut texture = Texture::new(
             &self.device,
             Arc::clone(&self.descriptor_heap),
-            Arc::clone(&self.allocator),
             image.size[0] as u32,
             image.size[1] as u32,
         )
@@ -447,7 +407,6 @@ impl Painter for PainterDX12 {
                 Texture::new(
                     &self.device,
                     Arc::clone(&self.descriptor_heap),
-                    Arc::clone(&self.allocator),
                     width,
                     height,
                 )

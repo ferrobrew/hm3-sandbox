@@ -1,109 +1,76 @@
-use std::{
-    mem, ptr,
-    sync::{Arc, Mutex},
-};
+use std::{mem, ptr};
 
 use anyhow::{Context, Result};
-use gpu_allocator::{
-    d3d12::{AllocationCreateDesc, Allocator},
-    MemoryLocation,
-};
 use windows::Win32::Graphics::{
     Direct3D12::{
-        ID3D12Device, ID3D12Heap, ID3D12Resource, D3D12_RESOURCE_DESC,
-        D3D12_RESOURCE_DIMENSION_BUFFER, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATES,
+        ID3D12Device, ID3D12Resource, D3D12_HEAP_FLAG_NONE, D3D12_HEAP_PROPERTIES,
+        D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_DESC, D3D12_RESOURCE_DIMENSION_BUFFER,
+        D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ,
         D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
     },
     Dxgi::Common::{DXGI_FORMAT_UNKNOWN, DXGI_SAMPLE_DESC},
 };
 
-use super::allocated_resource::AllocatedResource;
-
 pub struct Buffer<T> {
     capacity: usize,
-    resource: AllocatedResource,
+    resource: ID3D12Resource,
     pointer: *mut T,
 }
 
 impl<T> Buffer<T> {
-    pub fn new(
-        device: &ID3D12Device,
-        allocator: Arc<Mutex<Allocator>>,
-        capacity: usize,
-        state: D3D12_RESOURCE_STATES,
-    ) -> Result<Buffer<T>> {
-        let desc = D3D12_RESOURCE_DESC {
-            Dimension: D3D12_RESOURCE_DIMENSION_BUFFER,
-            Alignment: 0,
-            Width: (std::mem::size_of::<T>() * capacity) as u64,
-            Height: 1,
-            DepthOrArraySize: 1,
-            MipLevels: 1,
-            Format: DXGI_FORMAT_UNKNOWN,
-            SampleDesc: DXGI_SAMPLE_DESC {
-                Count: 1,
-                Quality: 0,
-            },
-            Layout: D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
-            Flags: D3D12_RESOURCE_FLAG_NONE,
-        };
+    pub fn new(device: &ID3D12Device, capacity: usize) -> Result<Buffer<T>> {
+        let resource = unsafe {
+            let desc = D3D12_RESOURCE_DESC {
+                Dimension: D3D12_RESOURCE_DIMENSION_BUFFER,
+                Alignment: 0,
+                Width: (mem::size_of::<T>() * capacity) as u64,
+                Height: 1,
+                DepthOrArraySize: 1,
+                MipLevels: 1,
+                Format: DXGI_FORMAT_UNKNOWN,
+                SampleDesc: DXGI_SAMPLE_DESC {
+                    Count: 1,
+                    Quality: 0,
+                },
+                Layout: D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+                Flags: D3D12_RESOURCE_FLAG_NONE,
+            };
 
-        let allocation = unsafe {
-            let mut allocator = allocator.lock().unwrap();
-            let desc = AllocationCreateDesc::from_d3d12_resource_desc(
-                allocator.device(),
-                mem::transmute(&desc),
-                "buffer",
-                MemoryLocation::CpuToGpu,
-            );
-            allocator.allocate(&desc)?
-        };
+            let props = D3D12_HEAP_PROPERTIES {
+                Type: D3D12_HEAP_TYPE_UPLOAD,
+                ..Default::default()
+            };
 
-        let handle = unsafe {
             let mut value: Option<ID3D12Resource> = None;
-            let heap: &ID3D12Heap = mem::transmute(&allocation.heap());
-            let result = device
-                .CreatePlacedResource(
-                    heap,
-                    allocation.offset(),
+            device
+                .CreateCommittedResource(
+                    &props,
+                    D3D12_HEAP_FLAG_NONE,
                     &desc,
-                    state,
+                    D3D12_RESOURCE_STATE_GENERIC_READ,
                     ptr::null(),
                     &mut value,
                 )
-                .context("Failed to create placed buffer resource");
-
-            if let Err(error) = result {
-                let mut allocator = allocator.lock().unwrap();
-                allocator.free(allocation).unwrap();
-                return Err(error);
-            };
-
+                .context("Failed to create placed buffer resource")?;
             value.unwrap()
         };
 
         let mut pointer: *mut T = ptr::null_mut();
         unsafe {
-            let result = handle
+            resource
                 .Map(0, ptr::null(), mem::transmute(&mut pointer))
-                .context("Failed to map buffer resource");
-
-            if let Err(error) = result {
-                let mut allocator = allocator.lock().unwrap();
-                allocator.free(allocation).unwrap();
-                return Err(error);
-            };
+                .context("Failed to map buffer resource")?;
         }
 
         Ok(Buffer::<T> {
             capacity,
-            resource: AllocatedResource::new(allocator, allocation, handle),
+            resource,
             pointer,
         })
     }
 
     pub fn handle(&self) -> &ID3D12Resource {
-        self.resource.handle()
+        &self.resource
     }
 
     pub fn get_ptr(&self, offset: usize) -> *mut T {
@@ -117,6 +84,6 @@ impl<T> Buffer<T> {
 
 impl<T> Drop for Buffer<T> {
     fn drop(&mut self) {
-        unsafe { self.resource.handle().Unmap(0, std::ptr::null()) }
+        unsafe { self.resource.Unmap(0, ptr::null()) }
     }
 }

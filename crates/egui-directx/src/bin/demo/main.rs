@@ -9,7 +9,7 @@ use windows::{
         Graphics::{
             Direct3D::D3D_FEATURE_LEVEL_12_0,
             Direct3D12::{
-                D3D12CreateDevice, D3D12GetDebugInterface, ID3D12CommandQueue, ID3D12Debug5,
+                D3D12CreateDevice, D3D12GetDebugInterface, ID3D12CommandQueue, ID3D12Debug1,
                 ID3D12Device, D3D12_COMMAND_QUEUE_DESC,
             },
             Dxgi::{
@@ -40,16 +40,15 @@ struct App {
 impl App {
     fn new(window: &Window) -> Result<App> {
         let mut flags = 0;
-        let mut dxgi_debug = None;
+        let dxgi_debug;
 
-        #[cfg(debug_assertions)]
+        //#[cfg(debug_assertions)]
         unsafe {
             let mut d3d_debug = None;
 
-            if D3D12GetDebugInterface::<ID3D12Debug5>(&mut d3d_debug).is_ok() {
+            if D3D12GetDebugInterface::<ID3D12Debug1>(&mut d3d_debug).is_ok() {
                 let d3d_debug = d3d_debug.unwrap();
                 d3d_debug.EnableDebugLayer();
-                d3d_debug.SetEnableAutoName(true);
                 d3d_debug.SetEnableGPUBasedValidation(true);
             }
 
@@ -125,6 +124,12 @@ impl App {
                 });
         });
 
+        unsafe {
+            if let Some(dxgi_debug) = &self.dxgi_debug {
+                dxgi_debug.EnableLeakTrackingForThread();
+            }
+        }
+
         {
             let mut painter = PainterDX12::new(
                 self.device.clone(),
@@ -139,6 +144,7 @@ impl App {
             self.swap_chain.Present(1, 0).expect("Failed to present");
 
             if let Some(dxgi_debug) = &self.dxgi_debug {
+                dxgi_debug.DisableLeakTrackingForThread();
                 dxgi_debug.ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_ALL)?;
             }
         }
