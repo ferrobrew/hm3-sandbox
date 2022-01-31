@@ -148,7 +148,11 @@ impl Module {
         Ok(self.rel_to_abs_addr(offset))
     }
 
-    pub fn scan_for_relative_callsite(&self, pattern: &str, addr_offset: usize) -> anyhow::Result<*mut u8> {
+    pub fn scan_for_relative_callsite(
+        &self,
+        pattern: &str,
+        addr_offset: usize,
+    ) -> anyhow::Result<*mut u8> {
         let offset = if let Some(offset) = self
             .cache
             .get(&CacheKey::RelativeCallsite(pattern.to_owned()))

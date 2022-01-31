@@ -1,7 +1,7 @@
 use std::mem;
 
 use crate::detouring::prelude::*;
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use windows::Win32::{
     Foundation::HANDLE,
     Graphics::Direct3D12::{ID3D12CommandQueue, ID3D12Device, ID3D12Fence},

@@ -1,4 +1,4 @@
-use std::{env, mem, ptr, os::windows::prelude::FromRawHandle};
+use std::{env, mem, os::windows::prelude::FromRawHandle, ptr};
 
 use anyhow::{anyhow, Context, Result};
 use detour::Function;

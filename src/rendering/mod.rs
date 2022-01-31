@@ -1,8 +1,8 @@
+pub mod overlay;
+
 use crate::{detouring::prelude::*, game::zrender::RENDER_MANAGER};
 use anyhow::Result;
-use egui::Color32;
-use egui_directx::{self, Painter, PainterDX12};
-use std::{mem, ptr};
+use std::ptr;
 use windows::{
     core::{Interface, HRESULT},
     Win32::{
@@ -32,6 +32,8 @@ use windows::{
         },
     },
 };
+
+use self::overlay::OVERLAY;
 
 #[derive(Debug)]
 struct VTables {
@@ -148,50 +150,15 @@ static_detour! {
     pub static EXECUTE_COMMAND_LISTS:  extern "system" fn(ID3D12CommandQueue, u32, *const *mut ID3D12CommandList);
 }
 
-static mut PAINTER: Option<PainterDX12> = None;
-static mut CURRENT_COMMAND_QUEUE: Option<ID3D12CommandQueue> = None;
-
 pub fn present(this: IDXGISwapChain, syncinterval: u32, flags: u32) -> windows::core::HRESULT {
-    #[cfg(feature = "debug-logging")]
-    println!("present(syncinterval: {}, flags: {})", syncinterval, flags);
     unsafe {
-        if let Ok(swap_chain) = this.cast::<IDXGISwapChain4>() {
-            if let Ok(device) = swap_chain.GetDevice::<ID3D12Device>() {
-                let input = egui::RawInput::default();
-                let mut ctx = egui::CtxRef::default();
-                let (output, shapes) = ctx.run(input, |ctx| {
-                    egui::CentralPanel::default()
-                        .frame(egui::Frame {
-                            fill: Color32::TRANSPARENT,
-                            ..Default::default()
-                        })
-                        .show(&ctx, |ui| {
-                            ui.label("Hello world!");
-                            ui.label("Hello world!");
-                            ui.label("Hello world!");
-                            ui.label("Hello world!");
-                            ui.label("Hello world!");
-                            ui.label("Hello world!");
-                            ui.label("Hello world!");
-                            if ui.button("Click me").clicked() {
-                                // take some action here
-                            }
-                        });
-                });
-
-                if let Some(render_manager) = RENDER_MANAGER {
-                    if PAINTER.is_none() {
-                        let command_queue =
-                            &(*(*render_manager).device).command_queues[0].command_queue;
-                        PAINTER = PainterDX12::new(device, command_queue.clone(), swap_chain).ok();
-                    }
-
-                    if let Some(painter) = &mut PAINTER {
-                        painter.upload_egui_texture(&ctx.font_image());
-                        painter.paint_meshes(ctx.tessellate(shapes), 1.0);
-                    }
-                }
-            }
+        if let (Some(render_manager), Ok(device), Ok(swap_chain)) = (
+            RENDER_MANAGER,
+            this.GetDevice::<ID3D12Device>(),
+            this.cast::<IDXGISwapChain4>(),
+        ) {
+            let command_queue = &(*(*render_manager).device).command_queues[0].command_queue;
+            OVERLAY.lock().unwrap().render(&device, command_queue, &swap_chain);
         }
         PRESENT_DETOUR.call(this, syncinterval, flags)
     }
@@ -210,27 +177,16 @@ pub fn resize_buffers(
         "resize_buffers(buffercount: {}, width: {}, height: {}, newformat: {}, swapchainflags: {})",
         buffercount, width, height, newformat, swapchainflags
     );
-
-    unsafe {
-        let detour = || {
-            RESIZE_BUFFERS_DETOUR.call(
-                this.clone(),
-                buffercount,
-                width,
-                height,
-                newformat,
-                swapchainflags,
-            )
-        };
-
-        if let Some(painter) = &mut PAINTER {
-            painter
-                .resize_buffers(&detour)
-                .expect("Failed to resize buffers")
-        } else {
-            detour()
-        }
-    }
+    OVERLAY.lock().unwrap().resize(&|| unsafe {
+        RESIZE_BUFFERS_DETOUR.call(
+            this.clone(),
+            buffercount,
+            width,
+            height,
+            newformat,
+            swapchainflags,
+        )
+    })
 }
 
 pub fn resize_target(this: IDXGISwapChain, pnewtargetparameters: *const DXGI_MODE_DESC) -> HRESULT {
@@ -242,26 +198,9 @@ pub fn resize_target(this: IDXGISwapChain, pnewtargetparameters: *const DXGI_MOD
     unsafe { RESIZE_TARGET_DETOUR.call(this, pnewtargetparameters) }
 }
 
-pub fn execute_command_lists(
-    this: ID3D12CommandQueue,
-    num_command_lists: u32,
-    command_lists: *const *mut ID3D12CommandList,
-) {
-    #[cfg(feature = "debug-logging")]
-    println!(
-        "execute_command_lists(num_command_lists: {}, command_lists: 0x{:X})",
-        num_command_lists, command_lists as usize
-    );
-    unsafe {
-        CURRENT_COMMAND_QUEUE = Some(this.clone());
-        EXECUTE_COMMAND_LISTS.call(this, num_command_lists, command_lists)
-    }
-}
-
-pub fn hook(module: &Module) -> Result<()> {
+pub fn hook() -> Result<()> {
     unsafe {
         let vtables = get_vtables()?;
-        println!("{:?}", vtables);
 
         PRESENT_DETOUR.initialize(
             std::mem::transmute((*vtables.idxgiswapchain1_vtbl).8),
@@ -281,12 +220,8 @@ pub fn hook(module: &Module) -> Result<()> {
         )?;
         RESIZE_TARGET_DETOUR.enable()?;
 
-        EXECUTE_COMMAND_LISTS.initialize(
-            std::mem::transmute((*vtables.id3d12_command_queue_vtbl).10),
-            execute_command_lists,
-        )?;
-        EXECUTE_COMMAND_LISTS.enable()?;
+        #[cfg(feature = "debug-logging")]
+        println!("Hooked DX12 vtbls:\n{:?}", vtables);
     }
-    println!("Detoured rendering");
     Ok(())
 }
