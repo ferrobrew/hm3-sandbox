@@ -7,15 +7,14 @@ use std::{
 
 use anyhow::{anyhow, Context, Result};
 use egui::{epaint::Vertex, vec2, ClippedMesh, FontImage, TextureId};
-use windows::{Win32::{
+use windows::Win32::{
     Foundation::{BOOL, PSTR, RECT},
     Graphics::{
         Direct3D::{Fxc::D3DCompile2, ID3DBlob},
         Direct3D12::{
             D3D12SerializeRootSignature, ID3D12CommandQueue, ID3D12Device, ID3D12PipelineState,
             ID3D12RootSignature, D3D12_BLEND_DESC, D3D12_BLEND_INV_SRC_ALPHA, D3D12_BLEND_ONE,
-            D3D12_BLEND_OP_ADD, D3D12_BLEND_SRC_ALPHA, D3D12_BLEND_ZERO,
-            D3D12_COLOR_WRITE_ENABLE_ALL, D3D12_COMPARISON_FUNC_ALWAYS,
+            D3D12_BLEND_OP_ADD, D3D12_COLOR_WRITE_ENABLE_ALL, D3D12_COMPARISON_FUNC_ALWAYS,
             D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF, D3D12_CULL_MODE_NONE,
             D3D12_DEPTH_STENCIL_DESC, D3D12_DEPTH_WRITE_MASK_ZERO,
             D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
@@ -27,7 +26,7 @@ use windows::{Win32::{
             D3D12_ROOT_PARAMETER_TYPE_CBV, D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
             D3D12_ROOT_SIGNATURE_DESC,
             D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT, D3D12_SHADER_BYTECODE,
-            D3D12_STATIC_BORDER_COLOR_OPAQUE_BLACK, D3D12_STATIC_SAMPLER_DESC,
+            D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK, D3D12_STATIC_SAMPLER_DESC,
             D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D_ROOT_SIGNATURE_VERSION_1,
         },
         Dxgi::{
@@ -38,7 +37,7 @@ use windows::{Win32::{
             IDXGISwapChain4,
         },
     },
-}, core::HRESULT};
+};
 
 use super::{
     super::painter::Painter, buffer::Buffer, descriptor_heap::DescriptorHeap,
@@ -103,7 +102,7 @@ fn create_root_signature(device: &ID3D12Device) -> Result<ID3D12RootSignature> {
         AddressV: D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
         AddressW: D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
         ComparisonFunc: D3D12_COMPARISON_FUNC_ALWAYS,
-        BorderColor: D3D12_STATIC_BORDER_COLOR_OPAQUE_BLACK,
+        BorderColor: D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK,
         ShaderRegister: 1,
         ..Default::default()
     }];
@@ -239,11 +238,11 @@ fn create_pipeline_state(
                     D3D12_RENDER_TARGET_BLEND_DESC {
                         BlendEnable: BOOL(1),
                         LogicOpEnable: BOOL(0),
-                        SrcBlend: D3D12_BLEND_SRC_ALPHA,
+                        SrcBlend: D3D12_BLEND_ONE,
                         DestBlend: D3D12_BLEND_INV_SRC_ALPHA,
                         BlendOp: D3D12_BLEND_OP_ADD,
                         SrcBlendAlpha: D3D12_BLEND_ONE,
-                        DestBlendAlpha: D3D12_BLEND_ZERO,
+                        DestBlendAlpha: D3D12_BLEND_INV_SRC_ALPHA,
                         BlendOpAlpha: D3D12_BLEND_OP_ADD,
                         LogicOp: D3D12_LOGIC_OP_NOOP,
                         RenderTargetWriteMask: D3D12_COLOR_WRITE_ENABLE_ALL as _,
@@ -514,7 +513,8 @@ impl Painter for PainterDX12 {
     }
 
     fn resize_buffers<F, R>(&mut self, callback: F) -> Result<R>
-        where F: FnOnce() -> R
+    where
+        F: FnOnce() -> R,
     {
         self.frame_contexts.clear();
         let result = callback();
