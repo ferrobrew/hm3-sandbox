@@ -1,15 +1,15 @@
-use std::time::Instant;
+use std::{time::Instant, borrow::Borrow};
 
-use egui::{pos2, vec2, CtxRef, Event, PointerButton, Pos2, RawInput, Rect};
+use egui::{pos2, vec2, Event, PointerButton, Pos2, RawInput, Rect};
 use windows::Win32::{
-    Foundation::{HWND, LPARAM, WPARAM},
+    Foundation::{HWND, LPARAM, RECT, WPARAM},
     UI::{
         Controls::WM_MOUSELEAVE,
         WindowsAndMessaging::{
             USER_DEFAULT_SCREEN_DPI, WHEEL_DELTA, WM_DPICHANGED, WM_LBUTTONDOWN, WM_LBUTTONUP,
             WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEHWHEEL, WM_MOUSEMOVE, WM_MOUSEWHEEL,
-            WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SIZE,
-        },
+            WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SIZE, WM_LBUTTONDBLCLK, WM_RBUTTONDBLCLK, WM_MBUTTONDBLCLK, GetClientRect,
+        }, HiDpi::GetDpiForWindow,
     },
 };
 
@@ -19,17 +19,32 @@ pub struct WindowInput {
     hwnd: HWND,
     pos: Pos2,
     raw: RawInput,
-    ctx: CtxRef,
     start_time: Instant,
 }
 
 impl WindowInput {
     pub fn new(hwnd: HWND) -> Self {
+        let mut raw = RawInput::default();
+
+        let (width, height) = unsafe {
+            let mut rect = RECT::default();
+            GetClientRect(hwnd, &mut rect);
+            ((rect.right - rect.left) as f32, (rect.bottom - rect.top) as f32)
+        };        
+        raw.screen_rect = Some(Rect {
+            min: pos2(0.0, 0.0),
+            max: pos2(width, height),
+        });
+
+        let dpi_scale = unsafe {
+            GetDpiForWindow(hwnd) as f32 / (USER_DEFAULT_SCREEN_DPI as f32)
+        };
+        raw.pixels_per_point = Some(dpi_scale);
+
         Self {
             hwnd,
             pos: Pos2::default(),
-            raw: RawInput::default(),
-            ctx: CtxRef::default(),
+            raw,
             start_time: Instant::now(),
         }
     }
@@ -51,15 +66,11 @@ impl WindowInput {
         self.raw.take()
     }
 
-    pub fn get_ctx(&mut self) -> &mut CtxRef {
-        &mut self.ctx
-    }
-
     pub fn wnd_proc(&mut self, msg: u32, wparam: WPARAM, lparam: LPARAM) -> bool {
         return match msg {
             WM_DPICHANGED => {
-                let pixels_per_point = (wparam.loword() as f32) / (USER_DEFAULT_SCREEN_DPI as f32);
-                self.raw.pixels_per_point = Some(pixels_per_point);
+                let dpi_scale = (wparam.loword() as f32) / (USER_DEFAULT_SCREEN_DPI as f32);
+                self.raw.pixels_per_point = Some(dpi_scale);
                 false
             }
             WM_SIZE => {
@@ -97,6 +108,10 @@ impl WindowInput {
                 self.add_mouse_event(PointerButton::Primary, true);
                 true
             }
+            WM_LBUTTONDBLCLK  => {
+                self.add_mouse_event(PointerButton::Primary, true);
+                true
+            }
             WM_LBUTTONUP => {
                 self.add_mouse_event(PointerButton::Primary, false);
                 true
@@ -105,11 +120,19 @@ impl WindowInput {
                 self.add_mouse_event(PointerButton::Secondary, true);
                 true
             }
+            WM_RBUTTONDBLCLK => {
+                self.add_mouse_event(PointerButton::Secondary, true);
+                true
+            }
             WM_RBUTTONUP => {
                 self.add_mouse_event(PointerButton::Secondary, false);
                 true
             }
             WM_MBUTTONDOWN => {
+                self.add_mouse_event(PointerButton::Middle, true);
+                true
+            }
+            WM_MBUTTONDBLCLK => {
                 self.add_mouse_event(PointerButton::Middle, true);
                 true
             }

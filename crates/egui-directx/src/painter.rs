@@ -16,6 +16,5 @@ pub trait Painter {
     fn paint_meshes(
         &mut self,
         clipped_meshes: Vec<egui::ClippedMesh>,
-        pixels_per_point: f32,
     ) -> anyhow::Result<()>;
 }

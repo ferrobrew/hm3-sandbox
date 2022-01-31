@@ -160,7 +160,6 @@ impl FrameContext {
     pub fn begin_frame(
         &mut self,
         screen_size_pixels: &Vec2,
-        pixels_per_point: f32,
         root_signature: &ID3D12RootSignature,
         descriptor_heap: &Arc<Mutex<DescriptorHeap>>,
         constant_buffer: &Buffer<CBuffer>,
@@ -179,7 +178,6 @@ impl FrameContext {
 
         // Miscellaneous render state
         let blend_factor = [0f32; 4];
-        let screen_size_points = *screen_size_pixels / pixels_per_point;
 
         unsafe {
             self.command_list.OMSetBlendFactor(blend_factor.as_ptr());
@@ -190,7 +188,7 @@ impl FrameContext {
             // Bind and upload constant buffer
             ptr::copy_nonoverlapping(
                 &CBuffer {
-                    screen_size_points: screen_size_points.into(),
+                    screen_size: screen_size_pixels.into(),
                 },
                 constant_buffer.get_ptr(0),
                 1,

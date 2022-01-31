@@ -46,7 +46,7 @@ use super::{
 
 #[repr(C)]
 pub struct CBuffer {
-    pub screen_size_points: [f32; 2],
+    pub screen_size: [f32; 2],
 }
 
 pub struct PainterDX12 {
@@ -429,7 +429,6 @@ impl Painter for PainterDX12 {
     fn paint_meshes(
         &mut self,
         clipped_meshes: Vec<ClippedMesh>,
-        pixels_per_point: f32,
     ) -> anyhow::Result<()> {
         // Not sure how to do this without inlining....
         let frame_context = {
@@ -445,7 +444,6 @@ impl Painter for PainterDX12 {
 
         frame_context.begin_frame(
             &screen_size_pixels,
-            pixels_per_point,
             &self.root_signature,
             &self.descriptor_heap,
             &self.constant_buffer,
@@ -461,10 +459,10 @@ impl Painter for PainterDX12 {
                 }
             } {
                 // Transform clip rect to physical pixels:
-                let clip_min_x = pixels_per_point * clip_rect.min.x;
-                let clip_min_y = pixels_per_point * clip_rect.min.y;
-                let clip_max_x = pixels_per_point * clip_rect.max.x;
-                let clip_max_y = pixels_per_point * clip_rect.max.y;
+                let clip_min_x = clip_rect.min.x;
+                let clip_min_y = clip_rect.min.y;
+                let clip_max_x = clip_rect.max.x;
+                let clip_max_y = clip_rect.max.y;
 
                 // Make sure clip rect can fit within a `i32`:
                 let clip_min_x = clip_min_x.clamp(0.0, screen_size_pixels.x);
@@ -533,6 +531,9 @@ impl Painter for PainterDX12 {
         Ok(result)
     }
 }
+
+unsafe impl Send for PainterDX12 {}
+unsafe impl Sync for PainterDX12 {}
 
 impl Drop for PainterDX12 {
     fn drop(&mut self) {
