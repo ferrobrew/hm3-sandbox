@@ -158,7 +158,10 @@ pub fn present(this: IDXGISwapChain, syncinterval: u32, flags: u32) -> windows::
             this.cast::<IDXGISwapChain4>(),
         ) {
             let command_queue = &(*(*render_manager).device).command_queues[0].command_queue;
-            OVERLAY.lock().unwrap().render(&device, command_queue, &swap_chain);
+            OVERLAY
+                .lock()
+                .unwrap()
+                .render(&device, command_queue, &swap_chain);
         }
         PRESENT_DETOUR.call(this, syncinterval, flags)
     }

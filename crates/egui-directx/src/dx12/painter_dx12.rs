@@ -426,10 +426,7 @@ impl Painter for PainterDX12 {
         }
     }
 
-    fn paint_meshes(
-        &mut self,
-        clipped_meshes: Vec<ClippedMesh>,
-    ) -> anyhow::Result<()> {
+    fn paint_meshes(&mut self, clipped_meshes: Vec<ClippedMesh>) -> anyhow::Result<()> {
         // Not sure how to do this without inlining....
         let frame_context = {
             let frame_index = unsafe { self.swap_chain.GetCurrentBackBufferIndex() as usize };

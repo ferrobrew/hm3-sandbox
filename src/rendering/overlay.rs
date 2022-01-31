@@ -8,7 +8,11 @@ use windows::Win32::{
     Graphics::{
         Direct3D12::{ID3D12CommandQueue, ID3D12Device},
         Dxgi::IDXGISwapChain4,
-    }, UI::{WindowsAndMessaging::{WM_KEYUP, WM_SIZE, WM_DPICHANGED}, Input::KeyboardAndMouse::VK_OEM_3},
+    },
+    UI::{
+        Input::KeyboardAndMouse::VK_OEM_3,
+        WindowsAndMessaging::{WM_DPICHANGED, WM_KEYUP, WM_SIZE},
+    },
 };
 
 pub struct Overlay {

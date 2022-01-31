@@ -1,15 +1,17 @@
-use std::{time::Instant, borrow::Borrow};
+use std::time::Instant;
 
 use egui::{pos2, vec2, Event, PointerButton, Pos2, RawInput, Rect};
 use windows::Win32::{
     Foundation::{HWND, LPARAM, RECT, WPARAM},
     UI::{
         Controls::WM_MOUSELEAVE,
+        HiDpi::GetDpiForWindow,
         WindowsAndMessaging::{
-            USER_DEFAULT_SCREEN_DPI, WHEEL_DELTA, WM_DPICHANGED, WM_LBUTTONDOWN, WM_LBUTTONUP,
-            WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEHWHEEL, WM_MOUSEMOVE, WM_MOUSEWHEEL,
-            WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SIZE, WM_LBUTTONDBLCLK, WM_RBUTTONDBLCLK, WM_MBUTTONDBLCLK, GetClientRect,
-        }, HiDpi::GetDpiForWindow,
+            GetClientRect, USER_DEFAULT_SCREEN_DPI, WHEEL_DELTA, WM_DPICHANGED, WM_LBUTTONDBLCLK,
+            WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDBLCLK, WM_MBUTTONDOWN, WM_MBUTTONUP,
+            WM_MOUSEHWHEEL, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_RBUTTONDBLCLK, WM_RBUTTONDOWN,
+            WM_RBUTTONUP, WM_SIZE,
+        },
     },
 };
 
@@ -29,16 +31,17 @@ impl WindowInput {
         let (width, height) = unsafe {
             let mut rect = RECT::default();
             GetClientRect(hwnd, &mut rect);
-            ((rect.right - rect.left) as f32, (rect.bottom - rect.top) as f32)
-        };        
+            (
+                (rect.right - rect.left) as f32,
+                (rect.bottom - rect.top) as f32,
+            )
+        };
         raw.screen_rect = Some(Rect {
             min: pos2(0.0, 0.0),
             max: pos2(width, height),
         });
 
-        let dpi_scale = unsafe {
-            GetDpiForWindow(hwnd) as f32 / (USER_DEFAULT_SCREEN_DPI as f32)
-        };
+        let dpi_scale = unsafe { GetDpiForWindow(hwnd) as f32 / (USER_DEFAULT_SCREEN_DPI as f32) };
         raw.pixels_per_point = Some(dpi_scale);
 
         Self {
@@ -108,7 +111,7 @@ impl WindowInput {
                 self.add_mouse_event(PointerButton::Primary, true);
                 true
             }
-            WM_LBUTTONDBLCLK  => {
+            WM_LBUTTONDBLCLK => {
                 self.add_mouse_event(PointerButton::Primary, true);
                 true
             }
