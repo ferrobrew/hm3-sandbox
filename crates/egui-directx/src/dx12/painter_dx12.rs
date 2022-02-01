@@ -426,7 +426,7 @@ impl Painter for PainterDX12 {
         }
     }
 
-    fn paint_meshes(&mut self, clipped_meshes: Vec<ClippedMesh>) -> anyhow::Result<()> {
+    fn paint_meshes(&mut self, clipped_meshes: Vec<ClippedMesh>, pixels_per_point: f32) -> anyhow::Result<()> {
         // Not sure how to do this without inlining....
         let frame_context = {
             let frame_index = unsafe { self.swap_chain.GetCurrentBackBufferIndex() as usize };
@@ -440,7 +440,8 @@ impl Painter for PainterDX12 {
         let command_list = frame_context.command_list().clone();
 
         frame_context.begin_frame(
-            &screen_size_pixels,
+            screen_size_pixels,
+            //pixels_per_point,
             &self.root_signature,
             &self.descriptor_heap,
             &self.constant_buffer,
@@ -456,10 +457,10 @@ impl Painter for PainterDX12 {
                 }
             } {
                 // Transform clip rect to physical pixels:
-                let clip_min_x = clip_rect.min.x;
-                let clip_min_y = clip_rect.min.y;
-                let clip_max_x = clip_rect.max.x;
-                let clip_max_y = clip_rect.max.y;
+                let clip_min_x = clip_rect.min.x * pixels_per_point;
+                let clip_min_y = clip_rect.min.y * pixels_per_point;
+                let clip_max_x = clip_rect.max.x * pixels_per_point;
+                let clip_max_y = clip_rect.max.y * pixels_per_point;
 
                 // Make sure clip rect can fit within a `i32`:
                 let clip_min_x = clip_min_x.clamp(0.0, screen_size_pixels.x);
@@ -518,6 +519,8 @@ impl Painter for PainterDX12 {
                 .GetDesc()
                 .context("Failed to get swap chain description")?
         };
+        self.width = swap_chain_desc.BufferDesc.Width;
+        self.height = swap_chain_desc.BufferDesc.Height;
         self.frame_contexts = FrameContext::new(
             &self.device,
             &self.pipeline_state,
