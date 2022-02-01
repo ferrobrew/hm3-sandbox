@@ -301,7 +301,7 @@ fn create_buffers(device: &ID3D12Device) -> Result<(Buffer<CBuffer>, Buffer<Vert
     Ok((
         Buffer::new(device, 1)?,
         Buffer::new(device, 16384)?,
-        Buffer::new(device, 8192)?,
+        Buffer::new(device, 65536)?,
     ))
 }
 
