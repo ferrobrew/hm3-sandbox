@@ -22,38 +22,45 @@ pub struct WindowInput {
     pos: Pos2,
     raw: RawInput,
     start_time: Instant,
+    screen_rect: Rect,
+    pixels_per_point: f32,
 }
 
 impl WindowInput {
     pub fn new(hwnd: HWND) -> Self {
-        let mut raw = RawInput::default();
-
-        let (width, height) = unsafe {
-            let mut rect = RECT::default();
-            GetClientRect(hwnd, &mut rect);
-            (
-                (rect.right - rect.left) as f32,
-                (rect.bottom - rect.top) as f32,
-            )
+        let pixels_per_point =
+            unsafe { GetDpiForWindow(hwnd) as f32 / (USER_DEFAULT_SCREEN_DPI as f32) };
+        let screen_rect = {
+            let (width, height) = unsafe {
+                let mut rect = RECT::default();
+                GetClientRect(hwnd, &mut rect);
+                (
+                    (rect.right - rect.left) as f32,
+                    (rect.bottom - rect.top) as f32,
+                )
+            };
+            Rect {
+                min: pos2(0.0, 0.0),
+                max: pos2(width / pixels_per_point, height / pixels_per_point),
+            }
         };
-        raw.screen_rect = Some(Rect {
-            min: pos2(0.0, 0.0),
-            max: pos2(width, height),
-        });
 
-        let dpi_scale = unsafe { GetDpiForWindow(hwnd) as f32 / (USER_DEFAULT_SCREEN_DPI as f32) };
-        raw.pixels_per_point = Some(dpi_scale);
+        let mut raw = RawInput::default();
+        raw.pixels_per_point = Some(pixels_per_point);
+        raw.screen_rect = Some(screen_rect);
 
         Self {
             hwnd,
             pos: Pos2::default(),
             raw,
             start_time: Instant::now(),
+            screen_rect,
+            pixels_per_point,
         }
     }
 
     fn add_mouse_event(&mut self, button: PointerButton, pressed: bool) {
-        let pos = event::get_pos(self.hwnd);
+        let pos = event::get_pos(self.hwnd, self.pixels_per_point);
         let modifiers = event::get_modifiers();
         self.raw.events.push(Event::PointerButton {
             pos,
@@ -72,21 +79,30 @@ impl WindowInput {
     pub fn wnd_proc(&mut self, msg: u32, wparam: WPARAM, lparam: LPARAM) -> bool {
         return match msg {
             WM_DPICHANGED => {
-                let dpi_scale = (wparam.loword() as f32) / (USER_DEFAULT_SCREEN_DPI as f32);
-                self.raw.pixels_per_point = Some(dpi_scale);
+                let width = self.screen_rect.width() as f32 * self.pixels_per_point;
+                let height = self.screen_rect.height() * self.pixels_per_point;
+                self.pixels_per_point = (wparam.loword() as f32) / (USER_DEFAULT_SCREEN_DPI as f32);
+                self.screen_rect.set_width(width / self.pixels_per_point);
+                self.screen_rect.set_height(height / self.pixels_per_point);
+                self.raw.screen_rect = Some(self.screen_rect);
+                self.raw.pixels_per_point = Some(self.pixels_per_point);
                 false
             }
             WM_SIZE => {
                 let width = lparam.loword() as f32;
                 let height = lparam.hiword() as f32;
-                self.raw.screen_rect = Some(Rect {
+                self.screen_rect = Rect {
                     min: pos2(0.0, 0.0),
-                    max: pos2(width, height),
-                });
+                    max: pos2(
+                        width / self.pixels_per_point,
+                        height / self.pixels_per_point,
+                    ),
+                };
+                self.raw.screen_rect = Some(self.screen_rect);
                 false
             }
             WM_MOUSEMOVE => {
-                let pos = event::get_pos(self.hwnd);
+                let pos = event::get_pos(self.hwnd, self.pixels_per_point);
                 if pos != self.pos {
                     self.raw.events.push(Event::PointerMoved(pos));
                     self.pos = pos;

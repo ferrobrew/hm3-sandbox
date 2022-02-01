@@ -9,7 +9,7 @@ use windows::Win32::{
 
 use crate::win32::{xparam, yparam};
 
-pub fn get_pos(hwnd: HWND) -> egui::Pos2 {
+pub fn get_pos(hwnd: HWND, pixels_per_point: f32) -> egui::Pos2 {
     unsafe {
         let point = GetMessagePos();
         let mut point = POINT {
@@ -17,7 +17,10 @@ pub fn get_pos(hwnd: HWND) -> egui::Pos2 {
             y: yparam(point) as i32,
         };
         ScreenToClient(hwnd, &mut point);
-        egui::pos2(point.x as f32, point.y as f32)
+        egui::pos2(
+            point.x as f32 / pixels_per_point,
+            point.y as f32 / pixels_per_point,
+        )
     }
 }
 

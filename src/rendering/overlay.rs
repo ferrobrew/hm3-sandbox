@@ -98,7 +98,9 @@ impl Overlay {
             });
 
             painter.upload_egui_texture(&ctx.font_image());
-            painter.paint_meshes(ctx.tessellate(shapes), 1.0).unwrap(); //ctx.pixels_per_point()).unwrap();
+            painter
+                .paint_meshes(ctx.tessellate(shapes), ctx.pixels_per_point())
+                .unwrap();
         }
     }
 }

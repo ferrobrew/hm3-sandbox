@@ -426,7 +426,11 @@ impl Painter for PainterDX12 {
         }
     }
 
-    fn paint_meshes(&mut self, clipped_meshes: Vec<ClippedMesh>, pixels_per_point: f32) -> anyhow::Result<()> {
+    fn paint_meshes(
+        &mut self,
+        clipped_meshes: Vec<ClippedMesh>,
+        pixels_per_point: f32,
+    ) -> anyhow::Result<()> {
         // Not sure how to do this without inlining....
         let frame_context = {
             let frame_index = unsafe { self.swap_chain.GetCurrentBackBufferIndex() as usize };
@@ -441,7 +445,7 @@ impl Painter for PainterDX12 {
 
         frame_context.begin_frame(
             screen_size_pixels,
-            //pixels_per_point,
+            pixels_per_point,
             &self.root_signature,
             &self.descriptor_heap,
             &self.constant_buffer,
