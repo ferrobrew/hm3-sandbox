@@ -7,10 +7,10 @@ use windows::Win32::{
         Controls::WM_MOUSELEAVE,
         HiDpi::GetDpiForWindow,
         WindowsAndMessaging::{
-            GetClientRect, USER_DEFAULT_SCREEN_DPI, WHEEL_DELTA, WM_DPICHANGED, WM_LBUTTONDBLCLK,
-            WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDBLCLK, WM_MBUTTONDOWN, WM_MBUTTONUP,
-            WM_MOUSEHWHEEL, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_RBUTTONDBLCLK, WM_RBUTTONDOWN,
-            WM_RBUTTONUP, WM_SIZE,
+            GetClientRect, USER_DEFAULT_SCREEN_DPI, WHEEL_DELTA, WM_CHAR, WM_DPICHANGED,
+            WM_KEYDOWN, WM_KEYUP, WM_LBUTTONDBLCLK, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDBLCLK,
+            WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEHWHEEL, WM_MOUSEMOVE, WM_MOUSEWHEEL,
+            WM_RBUTTONDBLCLK, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SIZE,
         },
     },
 };
@@ -157,6 +157,35 @@ impl WindowInput {
             }
             WM_MBUTTONUP => {
                 self.add_mouse_event(PointerButton::Middle, false);
+                true
+            }
+            WM_KEYDOWN => {
+                if let Some(key) = event::to_key(wparam.loword()) {
+                    let modifiers = event::get_modifiers();
+                    self.raw.events.push(Event::Key {
+                        key,
+                        modifiers,
+                        pressed: true,
+                    });
+                }
+                true
+            }
+            WM_KEYUP => {
+                if let Some(key) = event::to_key(wparam.loword()) {
+                    let modifiers = event::get_modifiers();
+                    self.raw.events.push(Event::Key {
+                        key,
+                        modifiers,
+                        pressed: false,
+                    });
+                }
+                true
+            }
+            WM_CHAR => {
+                if !matches!(wparam.0, 0x08 | 0x09 | 0x0A | 0x0D | 0x1B) {
+                    let text = String::from_utf16_lossy(&[wparam.loword()]);
+                    self.raw.events.push(Event::Text(text));
+                }
                 true
             }
             _ => false,
