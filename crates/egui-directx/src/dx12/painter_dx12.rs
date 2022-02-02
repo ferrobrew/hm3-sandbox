@@ -15,10 +15,9 @@ use windows::Win32::{
             D3D12SerializeRootSignature, ID3D12CommandQueue, ID3D12Device, ID3D12PipelineState,
             ID3D12RootSignature, D3D12_BLEND_DESC, D3D12_BLEND_INV_SRC_ALPHA, D3D12_BLEND_ONE,
             D3D12_BLEND_OP_ADD, D3D12_COLOR_WRITE_ENABLE_ALL, D3D12_COMPARISON_FUNC_ALWAYS,
-            D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF, D3D12_CULL_MODE_NONE,
-            D3D12_DEPTH_STENCIL_DESC, D3D12_DEPTH_WRITE_MASK_ZERO,
-            D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
-            D3D12_DESCRIPTOR_RANGE, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, D3D12_FILL_MODE_SOLID,
+            D3D12_CULL_MODE_NONE, D3D12_DEPTH_STENCIL_DESC, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+            D3D12_DESCRIPTOR_HEAP_TYPE_RTV, D3D12_DESCRIPTOR_RANGE,
+            D3D12_DESCRIPTOR_RANGE_TYPE_SRV, D3D12_FILL_MODE_SOLID,
             D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_GRAPHICS_PIPELINE_STATE_DESC,
             D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, D3D12_INPUT_ELEMENT_DESC,
             D3D12_INPUT_LAYOUT_DESC, D3D12_LOGIC_OP_NOOP, D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
@@ -262,12 +261,11 @@ fn create_pipeline_state(
                 FillMode: D3D12_FILL_MODE_SOLID,
                 CullMode: D3D12_CULL_MODE_NONE,
                 ForcedSampleCount: 1,
-                ConservativeRaster: D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF,
                 ..Default::default()
             },
             DepthStencilState: D3D12_DEPTH_STENCIL_DESC {
-                DepthWriteMask: D3D12_DEPTH_WRITE_MASK_ZERO,
-                DepthFunc: D3D12_COMPARISON_FUNC_ALWAYS,
+                DepthEnable: false.into(),
+                StencilEnable: false.into(),
                 ..Default::default()
             },
             InputLayout: D3D12_INPUT_LAYOUT_DESC {
@@ -451,6 +449,9 @@ impl Painter for PainterDX12 {
             &self.constant_buffer,
         )?;
 
+        let mut index_offset = 0;
+        let mut vertex_offset = 0;
+
         for ClippedMesh(clip_rect, mesh) in clipped_meshes {
             // Not sure how to do this without inlining....
             if let Some(texture) = {
@@ -477,7 +478,7 @@ impl Painter for PainterDX12 {
                 let clip_max_x = clip_max_x.round() as i32;
                 let clip_max_y = clip_max_y.round() as i32;
 
-                // scissor Y coordinate is from the bottom
+                // Set scissor rect
                 unsafe {
                     command_list.RSSetScissorRects(
                         1,
@@ -489,9 +490,6 @@ impl Painter for PainterDX12 {
                         },
                     );
                 };
-
-                let mut index_offset = 0;
-                let mut vertex_offset = 0;
 
                 texture.bind(&command_list)?;
 

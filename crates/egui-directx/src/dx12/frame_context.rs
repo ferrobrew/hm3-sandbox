@@ -247,11 +247,13 @@ impl FrameContext {
             );
             self.command_list
                 .IASetIndexBuffer(&D3D12_INDEX_BUFFER_VIEW {
-                    BufferLocation: handle.GetGPUVirtualAddress() + *index_offset as u64,
+                    BufferLocation: handle.GetGPUVirtualAddress() + (*index_offset * stride) as u64,
                     SizeInBytes: size as _,
                     Format: DXGI_FORMAT_R16_UINT,
                 });
         }
+
+        *index_offset += mesh.indices.len();
 
         // Bind and upload vertex buffer
         let stride = mem::size_of::<Vertex>();
@@ -267,26 +269,25 @@ impl FrameContext {
                 0,
                 1,
                 &D3D12_VERTEX_BUFFER_VIEW {
-                    BufferLocation: handle.GetGPUVirtualAddress() + *vertex_offset as u64,
+                    BufferLocation: handle.GetGPUVirtualAddress() + (*vertex_offset * stride) as u64,
                     SizeInBytes: size as _,
                     StrideInBytes: stride as _,
                 },
             );
         };
 
+        *vertex_offset += mesh.vertices.len();
+
         // Draw instance
         unsafe {
             self.command_list.DrawIndexedInstanced(
                 mesh.indices.len() as _,
                 1,
-                *index_offset as _,
-                *vertex_offset as _,
+                0,
+                0,
                 0,
             );
         }
-
-        *index_offset += mesh.indices.len();
-        *vertex_offset += mesh.vertices.len();
     }
 
     pub fn end_frame(
