@@ -269,7 +269,8 @@ impl FrameContext {
                 0,
                 1,
                 &D3D12_VERTEX_BUFFER_VIEW {
-                    BufferLocation: handle.GetGPUVirtualAddress() + (*vertex_offset * stride) as u64,
+                    BufferLocation: handle.GetGPUVirtualAddress()
+                        + (*vertex_offset * stride) as u64,
                     SizeInBytes: size as _,
                     StrideInBytes: stride as _,
                 },
@@ -280,13 +281,8 @@ impl FrameContext {
 
         // Draw instance
         unsafe {
-            self.command_list.DrawIndexedInstanced(
-                mesh.indices.len() as _,
-                1,
-                0,
-                0,
-                0,
-            );
+            self.command_list
+                .DrawIndexedInstanced(mesh.indices.len() as _, 1, 0, 0, 0);
         }
     }
 
