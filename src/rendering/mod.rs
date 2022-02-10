@@ -1,6 +1,6 @@
 pub mod overlay;
 
-use crate::{detouring::prelude::*, game::zrender::RENDER_MANAGER};
+use crate::{detouring::prelude::*, game::zrender::RENDER_MANAGER, HookLibrary};
 use anyhow::Result;
 use std::ptr;
 use windows::{
@@ -10,10 +10,10 @@ use windows::{
         Graphics::{
             Direct3D::D3D_FEATURE_LEVEL_12_0,
             Direct3D12::{
-                D3D12CreateDevice, D3D12GetDebugInterface, ID3D12CommandAllocator,
-                ID3D12CommandAllocatorVtbl, ID3D12CommandList, ID3D12CommandListVtbl,
-                ID3D12CommandQueue, ID3D12CommandQueueVtbl, ID3D12Debug, ID3D12Device,
-                ID3D12DeviceVtbl, D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12_COMMAND_QUEUE_DESC,
+                D3D12CreateDevice, ID3D12CommandAllocator, ID3D12CommandAllocatorVtbl,
+                ID3D12CommandList, ID3D12CommandListVtbl, ID3D12CommandQueue,
+                ID3D12CommandQueueVtbl, ID3D12Device, ID3D12DeviceVtbl,
+                D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12_COMMAND_QUEUE_DESC,
             },
             Dxgi::{
                 Common::{
@@ -57,18 +57,7 @@ unsafe extern "system" fn def_wnd_proc(
 
 fn get_vtables() -> Result<VTables> {
     unsafe {
-        let mut flags = 0;
-
-        #[cfg(feature = "debug-logging")]
-        {
-            let mut debug: Option<ID3D12Debug> = None;
-            if let Some(debug) = D3D12GetDebugInterface(&mut debug).ok().and(debug) {
-                debug.EnableDebugLayer();
-            }
-
-            flags &= DXGI_CREATE_FACTORY_DEBUG;
-        }
-
+        let flags = DXGI_CREATE_FACTORY_DEBUG;
         let factory: IDXGIFactory2 = CreateDXGIFactory2(flags)?;
         let adapter: IDXGIAdapter = factory.EnumAdapters(0)?;
         let device: ID3D12Device = {
@@ -144,13 +133,13 @@ fn get_vtables() -> Result<VTables> {
 }
 
 static_detour! {
-    pub static PRESENT_DETOUR: extern "system" fn(IDXGISwapChain, u32, u32) -> HRESULT;
-    pub static RESIZE_BUFFERS_DETOUR: extern "system" fn(IDXGISwapChain, u32, u32, u32, DXGI_FORMAT, u32) -> HRESULT;
-    pub static RESIZE_TARGET_DETOUR: extern "system" fn(IDXGISwapChain, *const DXGI_MODE_DESC) -> HRESULT;
-    pub static EXECUTE_COMMAND_LISTS:  extern "system" fn(ID3D12CommandQueue, u32, *const *mut ID3D12CommandList);
+    static PRESENT_DETOUR: extern "system" fn(IDXGISwapChain, u32, u32) -> HRESULT;
+    static RESIZE_BUFFERS_DETOUR: extern "system" fn(IDXGISwapChain, u32, u32, u32, DXGI_FORMAT, u32) -> HRESULT;
+    static RESIZE_TARGET_DETOUR: extern "system" fn(IDXGISwapChain, *const DXGI_MODE_DESC) -> HRESULT;
+    static EXECUTE_COMMAND_LISTS:  extern "system" fn(ID3D12CommandQueue, u32, *const *mut ID3D12CommandList);
 }
 
-pub fn present(this: IDXGISwapChain, syncinterval: u32, flags: u32) -> windows::core::HRESULT {
+fn present(this: IDXGISwapChain, syncinterval: u32, flags: u32) -> windows::core::HRESULT {
     unsafe {
         if let (Some(render_manager), Ok(device), Ok(swap_chain)) = (
             RENDER_MANAGER,
@@ -167,7 +156,7 @@ pub fn present(this: IDXGISwapChain, syncinterval: u32, flags: u32) -> windows::
     }
 }
 
-pub fn resize_buffers(
+fn resize_buffers(
     this: IDXGISwapChain,
     buffercount: u32,
     width: u32,
@@ -192,7 +181,7 @@ pub fn resize_buffers(
     })
 }
 
-pub fn resize_target(this: IDXGISwapChain, pnewtargetparameters: *const DXGI_MODE_DESC) -> HRESULT {
+fn resize_target(this: IDXGISwapChain, pnewtargetparameters: *const DXGI_MODE_DESC) -> HRESULT {
     #[cfg(feature = "debug-logging")]
     println!(
         "resize_target(pnewtargetparameters: 0x{:X})",
@@ -201,7 +190,7 @@ pub fn resize_target(this: IDXGISwapChain, pnewtargetparameters: *const DXGI_MOD
     unsafe { RESIZE_TARGET_DETOUR.call(this, pnewtargetparameters) }
 }
 
-pub fn hook() -> Result<()> {
+fn enable(_: &mut Module) -> Result<()> {
     unsafe {
         let vtables = get_vtables()?;
 
@@ -227,4 +216,20 @@ pub fn hook() -> Result<()> {
         println!("Hooked DX12 vtbls:\n{:?}", vtables);
     }
     Ok(())
+}
+
+fn disable() -> Result<()> {
+    unsafe {
+        PRESENT_DETOUR.disable()?;
+        RESIZE_BUFFERS_DETOUR.disable()?;
+        RESIZE_TARGET_DETOUR.disable()?;
+
+        #[cfg(feature = "debug-logging")]
+        println!("Unhooked DX12 vtbls");
+    }
+    Ok(())
+}
+
+pub fn hook_library() -> HookLibrary {
+    HookLibrary { enable, disable }
 }

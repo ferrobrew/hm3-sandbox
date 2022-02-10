@@ -12,7 +12,6 @@ vscode-lldb = []
 debug-console = []
 debug-logging = []
 default = [
-    "vscode-lldb",
     "debug-console",
     "debug-logging"
 ]
@@ -47,6 +46,7 @@ features = [
     "Win32_Security",
     "Win32_System_Console",
     "Win32_System_Diagnostics_Debug",
+    "Win32_System_Diagnostics_ToolHelp",
     "Win32_System_Kernel",
     "Win32_System_LibraryLoader",
     "Win32_System_Memory",

@@ -38,7 +38,7 @@ pub struct ZRenderManager {
 
 pub static mut RENDER_MANAGER: Option<*const ZRenderManager> = None;
 
-pub fn hook(module: &mut Module) -> Result<()> {
+pub fn enable(module: &mut Module) -> Result<()> {
     unsafe {
         let render_manager = module
             .scan_for_relative_callsite(
@@ -51,4 +51,12 @@ pub fn hook(module: &mut Module) -> Result<()> {
         println!("Hooked render_manager: 0x{:x}", *render_manager);
     }
     Ok(())
+}
+
+pub fn disable() -> Result<()> {
+    Ok(())
+}
+
+pub fn hook_library() -> HookLibrary {
+    HookLibrary { enable, disable }
 }

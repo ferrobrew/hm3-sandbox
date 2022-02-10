@@ -15,11 +15,23 @@ pub fn wnd_proc(this: usize, hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARA
     }
 }
 
-pub fn hook(module: &mut Module) -> Result<()> {
+pub fn enable(module: &mut Module) -> Result<()> {
     for binder in [&WND_PROC_BINDER] {
         binder.bind(module)?;
         binder.enable()?
     }
 
     Ok(())
+}
+
+pub fn disable() -> Result<()> {
+    for binder in [&WND_PROC_BINDER] {
+        binder.disable()?;
+    }
+
+    Ok(())
+}
+
+pub fn hook_library() -> HookLibrary {
+    HookLibrary { enable, disable }
 }
