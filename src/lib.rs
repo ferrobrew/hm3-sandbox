@@ -2,11 +2,12 @@ mod detouring;
 mod game;
 mod rendering;
 
-use std::{thread, mem};
+use std::{mem, thread};
 
 use crate::detouring::prelude::*;
 use c_string::c_str;
 use lazy_static::lazy_static;
+use libc::c_void;
 use parking_lot::{Condvar, Mutex};
 
 #[cfg(feature = "debug-console")]
@@ -88,14 +89,14 @@ fn main() {
 
 #[no_mangle]
 #[allow(clippy::missing_safety_doc)]
-pub unsafe extern "system" fn load(_: usize) {
+pub unsafe extern "system" fn load(_: *mut c_void, _: *mut c_void) {
     thread::spawn(main);
     OPERATION.wait(&mut OPERATION_MUTEX.lock());
 }
 
 #[no_mangle]
 #[allow(clippy::missing_safety_doc)]
-pub unsafe extern "system" fn unload(_: usize) {
+pub unsafe extern "system" fn unload(_: *mut c_void, _: *mut c_void) {
     OPERATION.notify_all();
     OPERATION.wait(&mut OPERATION_MUTEX.lock());
 }
