@@ -178,14 +178,14 @@ fn inject(process_info: &ProcessInfo) -> Result<()> {
         CloseHandle(process_info.process);
         Err(anyhow!("{message}"))
     };
-    let syringe = Syringe::new();
+    let mut syringe = Syringe::for_process(&process);
 
     if let Ok(module_handle) = find_module_handle(process_id) {
         if let Err(error) = unload_module(process_handle, module_handle) {
             return terminate(error.to_string().as_str());
         }
         if let Err(error) = syringe
-            .eject(unsafe { ProcessModule::new(mem::transmute(module_handle), process.get_ref()) })
+            .eject(unsafe { ProcessModule::new_unchecked(mem::transmute(module_handle), process.get_ref()) })
         {
             return terminate(error.to_string().as_str());
         }
@@ -193,7 +193,7 @@ fn inject(process_info: &ProcessInfo) -> Result<()> {
 
     fs::copy(payload_path, injected_payload_path.clone()).context("failed to copy payload")?;
 
-    if let Ok(module) = syringe.inject(&process, injected_payload_path) {
+    if let Ok(module) = syringe.inject(injected_payload_path) {
         let module_handle = unsafe { mem::transmute(module.handle()) };
 
         if let Err(error) = load_module(process_handle, module_handle) {
