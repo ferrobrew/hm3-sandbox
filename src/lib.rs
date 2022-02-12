@@ -2,7 +2,7 @@ mod detouring;
 mod game;
 mod rendering;
 
-use std::thread;
+use std::{thread, mem};
 
 use crate::detouring::prelude::*;
 use c_string::c_str;
@@ -51,42 +51,34 @@ fn main() {
         let mut success = true;
         let mut loaded_libraries = vec![];
 
-        {
-            let threads = ThreadGroup::new().expect("Failed to create thread group");
-
-            threads.suspend();
-            for hook_library in [
-                rendering::hook_library(),
-                game::zrender::hook_library(),
-                game::zapplication_engine_win32::hook_library(),
-            ] {
-                if let Err(error) = (hook_library.enable)(module) {
-                    success = false;
-                    println!("Failed to enable hook library: {error}");
-                    break;
-                } else {
-                    loaded_libraries.push(hook_library);
-                }
+        let suspender = ThreadSuspender::new().expect("Failed to create thread suspender");
+        for hook_library in [
+            rendering::hook_library(),
+            game::zrender::hook_library(),
+            game::zapplication_engine_win32::hook_library(),
+        ] {
+            if let Err(error) = (hook_library.enable)(module) {
+                success = false;
+                println!("Failed to enable hook library: {error}");
+                break;
+            } else {
+                loaded_libraries.push(hook_library);
             }
-            threads.resume();
         }
+        mem::drop(suspender);
 
         if success {
             OPERATION.notify_all();
             OPERATION.wait(&mut OPERATION_MUTEX.lock());
         }
 
-        {
-            let threads = ThreadGroup::new().expect("Failed to create thread group");
-
-            threads.suspend();
-            for hook_library in &loaded_libraries {
-                if let Err(error) = (hook_library.disable)() {
-                    println!("Failed to disable hook library: {error}");
-                }
+        let suspender = ThreadSuspender::new().expect("Failed to create thread suspender");
+        for hook_library in &loaded_libraries {
+            if let Err(error) = (hook_library.disable)() {
+                println!("Failed to disable hook library: {error}");
             }
-            threads.resume();
         }
+        mem::drop(suspender);
     }
 
     #[cfg(feature = "debug-console")]
