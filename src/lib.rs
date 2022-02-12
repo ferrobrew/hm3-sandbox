@@ -2,15 +2,12 @@ mod detouring;
 mod game;
 mod rendering;
 
-use std::{
-    sync::atomic::{AtomicBool, Ordering},
-    thread,
-    time::Duration,
-};
+use std::thread;
 
 use crate::detouring::prelude::*;
 use c_string::c_str;
 use lazy_static::lazy_static;
+use parking_lot::{Condvar, Mutex};
 
 #[cfg(feature = "debug-console")]
 fn alloc_console() {
@@ -36,8 +33,8 @@ fn free_console() {
 }
 
 lazy_static! {
-    static ref OPERATION_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
-    static ref IS_RUNNING: AtomicBool = AtomicBool::new(false);
+    static ref OPERATION: Condvar = Condvar::new();
+    static ref OPERATION_MUTEX: Mutex<()> = Mutex::new(());
 }
 
 fn main() {
@@ -51,6 +48,7 @@ fn main() {
         .expect("failed to find module");
 
     {
+        let mut success = true;
         let mut loaded_libraries = vec![];
 
         {
@@ -63,18 +61,20 @@ fn main() {
                 game::zapplication_engine_win32::hook_library(),
             ] {
                 if let Err(error) = (hook_library.enable)(module) {
+                    success = false;
                     println!("Failed to enable hook library: {error}");
-                    IS_RUNNING.store(false, Ordering::Relaxed);
                     break;
                 } else {
                     loaded_libraries.push(hook_library);
                 }
             }
             threads.resume();
-            OPERATION_IN_PROGRESS.store(false, Ordering::Relaxed);
         }
 
-        wait_for_bool(&IS_RUNNING);
+        if success {
+            OPERATION.notify_all();
+            OPERATION.wait(&mut OPERATION_MUTEX.lock());
+        }
 
         {
             let threads = ThreadGroup::new().expect("Failed to create thread group");
@@ -91,30 +91,19 @@ fn main() {
 
     #[cfg(feature = "debug-console")]
     free_console();
-    OPERATION_IN_PROGRESS.store(false, Ordering::Relaxed);
-}
-
-fn wait_for_bool(bool: &AtomicBool) {
-    while bool.load(Ordering::Relaxed) {
-        thread::sleep(Duration::from_millis(10_u64));
-    }
+    OPERATION.notify_all();
 }
 
 #[no_mangle]
 #[allow(clippy::missing_safety_doc)]
 pub unsafe extern "system" fn load(_: usize) {
-    if !IS_RUNNING.load(Ordering::Relaxed) {
-        IS_RUNNING.store(true, Ordering::Relaxed);
-        OPERATION_IN_PROGRESS.store(true, Ordering::Relaxed);
-        thread::spawn(main);
-        wait_for_bool(&OPERATION_IN_PROGRESS);
-    }
+    thread::spawn(main);
+    OPERATION.wait(&mut OPERATION_MUTEX.lock());
 }
 
 #[no_mangle]
 #[allow(clippy::missing_safety_doc)]
 pub unsafe extern "system" fn unload(_: usize) {
-    IS_RUNNING.store(false, Ordering::Relaxed);
-    OPERATION_IN_PROGRESS.store(true, Ordering::Relaxed);
-    wait_for_bool(&OPERATION_IN_PROGRESS);
+    OPERATION.notify_all();
+    OPERATION.wait(&mut OPERATION_MUTEX.lock());
 }
