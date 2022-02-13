@@ -14,11 +14,11 @@ use windows::Win32::{
     },
 };
 
-pub struct ThreadGroup {
+pub struct ThreadSuspender {
     threads: Vec<HANDLE>,
 }
 
-impl ThreadGroup {
+impl ThreadSuspender {
     pub fn new() -> Result<Self> {
         let process_id = unsafe { GetCurrentProcessId() };
         let handle = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, process_id) };
@@ -56,31 +56,38 @@ impl ThreadGroup {
             .map(|thread| unsafe { OpenThread(THREAD_ALL_ACCESS, false, thread.th32ThreadID) })
             .collect();
 
+        Self::suspend(&threads);
         Ok(Self { threads })
     }
 
-    pub fn suspend(&self) {
-        for handle in &self.threads {
+    fn suspend(threads: &Vec<HANDLE>) {
+        #[cfg(feature = "debug-console")]
+        println!("Suspended {} threads", threads.len());
+        for handle in threads {
             unsafe { SuspendThread(handle) };
         }
     }
 
-    pub fn resume(&self) {
-        for handle in &self.threads {
+    fn resume(threads: &Vec<HANDLE>) {
+        #[cfg(feature = "debug-console")]
+        println!("Resumed {} threads", threads.len());
+        for handle in threads {
             unsafe { ResumeThread(handle) };
         }
     }
 
-    pub fn release(&mut self) {
-        for handle in &self.threads {
+    fn close(threads: &Vec<HANDLE>) {
+        #[cfg(feature = "debug-console")]
+        println!("Closed {} threads", threads.len());
+        for handle in threads {
             unsafe { CloseHandle(handle) };
         }
-        self.threads.clear();
     }
 }
 
-impl Drop for ThreadGroup {
+impl Drop for ThreadSuspender {
     fn drop(&mut self) {
-        self.release();
+        Self::resume(&self.threads);
+        Self::close(&self.threads);
     }
 }
