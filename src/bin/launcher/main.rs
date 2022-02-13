@@ -16,7 +16,7 @@ const INJECTED_PAYLOAD_NAME: &str = "payload_loaded.dll";
 fn unload_module(syringe: &mut Syringe, process_ref: ProcessRef) -> Result<()> {
     if let Some(process_module) = ProcessModule::find(INJECTED_PAYLOAD_NAME, process_ref)? {
         if let Some(mut unload_procedure) = syringe.get_procedure(process_module, "unload")? {
-            let _: () = unload_procedure.call(&())?;
+            let _: u64 = unload_procedure.call(&0_u64)?;
             println!("Unload procedure executed!");
         } else {
             return Err(anyhow!("failed to call unload procedure"));
@@ -28,16 +28,21 @@ fn unload_module(syringe: &mut Syringe, process_ref: ProcessRef) -> Result<()> {
     Ok(())
 }
 
-fn load_module(syringe: &mut Syringe, process_ref: ProcessRef) -> Result<()> {
-    if let Some(process_module) = ProcessModule::find(INJECTED_PAYLOAD_NAME, process_ref)? {
-        if let Some(mut load_procedure) = syringe.get_procedure(process_module, "load")? {
-            let _: () = load_procedure.call(&())?;
-            println!("Load procedure executed!");
-        } else {
-            return Err(anyhow!("failed to call load procedure"));
-        }
+fn load_module(syringe: &mut Syringe) -> Result<()> {
+    let payload_path = env::current_exe()?.parent().unwrap().join(PAYLOAD_NAME);
+    let injected_payload_path = env::current_exe()?
+        .parent()
+        .unwrap()
+        .join(INJECTED_PAYLOAD_NAME);
+    fs::copy(payload_path, injected_payload_path.clone()).context("failed to copy payload")?;
 
-        syringe.eject(process_module)?;
+    let process_module = syringe.inject(injected_payload_path)?;
+
+    if let Some(mut load_procedure) = syringe.get_procedure(process_module, "load")? {
+        let _: u64 = load_procedure.call(&0_u64)?;
+        println!("Load procedure executed!");
+    } else {
+        return Err(anyhow!("failed to call load procedure"));
     }
 
     Ok(())
@@ -56,19 +61,8 @@ fn inject(process: Process) -> Result<()> {
         return terminate(error.to_string().as_str());
     }
 
-    let payload_path = env::current_exe()?.parent().unwrap().join(PAYLOAD_NAME);
-    let injected_payload_path = env::current_exe()?
-        .parent()
-        .unwrap()
-        .join(INJECTED_PAYLOAD_NAME);
-    fs::copy(payload_path, injected_payload_path.clone()).context("failed to copy payload")?;
-
-    if syringe.inject(injected_payload_path).is_ok() {
-        if let Err(error) = load_module(&mut syringe, process.get_ref()) {
-            return terminate(error.to_string().as_str());
-        }
-    } else {
-        return terminate("failed to inject payload");
+    if let Err(error) = load_module(&mut syringe) {
+        return terminate(error.to_string().as_str());
     }
 
     Ok(())
