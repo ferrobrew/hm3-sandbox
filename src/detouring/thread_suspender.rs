@@ -61,18 +61,24 @@ impl ThreadSuspender {
     }
 
     fn suspend(threads: &Vec<HANDLE>) {
+        #[cfg(feature = "debug-console")]
+        println!("Suspended {} threads", threads.len());
         for handle in threads {
             unsafe { SuspendThread(handle) };
         }
     }
 
     fn resume(threads: &Vec<HANDLE>) {
+        #[cfg(feature = "debug-console")]
+        println!("Resumed {} threads", threads.len());
         for handle in threads {
             unsafe { ResumeThread(handle) };
         }
     }
 
     fn close(threads: &Vec<HANDLE>) {
+        #[cfg(feature = "debug-console")]
+        println!("Closed {} threads", threads.len());
         for handle in threads {
             unsafe { CloseHandle(handle) };
         }
