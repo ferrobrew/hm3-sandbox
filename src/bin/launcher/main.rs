@@ -110,10 +110,12 @@ fn spawn_process() -> Result<Process> {
 }
 
 fn main() -> Result<()> {
-    if let Some(process) = Process::find_first_by_name(PROCESS_NAME).or(Some(spawn_process()?)) {
-        println!("Attempting to inject...");
-        inject(process)?;
-    }
+    let process = Process::find_first_by_name(PROCESS_NAME)
+        .ok_or(())
+        .or_else(|_| spawn_process())?;
+
+    println!("Attempting to inject...");
+    inject(process)?;
 
     Ok(())
 }
