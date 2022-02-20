@@ -86,10 +86,10 @@ impl Overlay {
             let input = input.get_input();
 
             let (_, shapes) = ctx.run(input, |ctx| {
-                Self::render_title_bar(ctx, self.capture);
+                Self::show_title_bar(ctx, self.capture);
 
                 if self.capture {
-                    self.console.render(ctx);
+                    self.console.show(ctx);
                 }
             });
 
@@ -100,7 +100,7 @@ impl Overlay {
         }
     }
 
-    fn render_title_bar(ctx: &CtxRef, capture: bool) {
+    fn show_title_bar(ctx: &CtxRef, capture: bool) {
         let frame = egui::Frame::none();
         egui::TopBottomPanel::top("title_bar")
             .frame(frame)
