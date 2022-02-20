@@ -1,4 +1,5 @@
 pub mod overlay;
+mod console;
 
 use crate::{detouring::prelude::*, game::zrender::RENDER_MANAGER, HookLibrary};
 use anyhow::Result;

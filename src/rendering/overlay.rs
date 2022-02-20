@@ -1,5 +1,6 @@
 use std::sync::Mutex;
 
+use super::console::Console;
 use egui::CtxRef;
 use egui_directx::{Painter, PainterDX12, WindowInput};
 use lazy_static::lazy_static;
@@ -21,7 +22,7 @@ pub struct Overlay {
     capture: bool,
     painter: Option<PainterDX12>,
     render: bool,
-    text_input: String,
+    console: Console,
 }
 
 impl Overlay {
@@ -32,7 +33,7 @@ impl Overlay {
             capture: false,
             painter: None,
             render: true,
-            text_input: Default::default(),
+            console: Console::new(),
         }
     }
 
@@ -85,49 +86,10 @@ impl Overlay {
             let input = input.get_input();
 
             let (_, shapes) = ctx.run(input, |ctx| {
-                {
-                    let frame = egui::Frame::none();
-                    egui::TopBottomPanel::top("title_bar")
-                        .frame(frame)
-                        .show(ctx, |ui| {
-                            ui.vertical_centered(|ui| {
-                                ui.add_space(5.0);
-                                ui.label("hm3-sandbox");
-                                ui.small(format!(
-                                    "Press ~ to {} menu",
-                                    match self.capture {
-                                        true => "close",
-                                        false => "open",
-                                    }
-                                ));
-                            })
-                        });
-                }
+                Self::show_title_bar(ctx, self.capture);
 
                 if self.capture {
-                    egui::TopBottomPanel::bottom("bottom_panel")
-                        .resizable(true)
-                        .min_height(200.0)
-                        .show(ctx, |ui| {
-                            ui.heading("Console");
-                            ui.separator();
-
-                            let text_style = egui::TextStyle::Body;
-                            let row_height = ui.fonts()[text_style].row_height();
-                            let num_rows = 6;
-                            egui::ScrollArea::vertical()
-                                .auto_shrink([false; 2])
-                                .show_rows(ui, row_height, num_rows, |ui, row_range| {
-                                    for row in row_range {
-                                        ui.label(format!("This is row {}/{}", row + 1, num_rows));
-                                    }
-                                });
-                            ui.end_row();
-                            ui.add(
-                                egui::TextEdit::singleline(&mut self.text_input)
-                                    .hint_text("Enter a command like 'exit' or `pause`"),
-                            );
-                        });
+                    self.console.show(ctx);
                 }
             });
 
@@ -136,6 +98,25 @@ impl Overlay {
                 .paint_meshes(ctx.tessellate(shapes), ctx.pixels_per_point())
                 .unwrap();
         }
+    }
+
+    fn show_title_bar(ctx: &CtxRef, capture: bool) {
+        let frame = egui::Frame::none();
+        egui::TopBottomPanel::top("title_bar")
+            .frame(frame)
+            .show(ctx, |ui| {
+                ui.vertical_centered(|ui| {
+                    ui.add_space(5.0);
+                    ui.label("hm3-sandbox");
+                    ui.small(format!(
+                        "Press ~ to {} menu",
+                        match capture {
+                            true => "close",
+                            false => "open",
+                        }
+                    ));
+                })
+            });
     }
 }
 
