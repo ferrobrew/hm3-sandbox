@@ -11,7 +11,7 @@ pub fn wnd_proc(this: usize, hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARA
     if OVERLAY.lock().unwrap().wnd_proc(hwnd, msg, wparam, lparam) {
         LRESULT(0)
     } else {
-        unsafe { WND_PROC.call(this, hwnd, msg, wparam, lparam) }
+        WND_PROC.call(this, hwnd, msg, wparam, lparam)
     }
 }
 

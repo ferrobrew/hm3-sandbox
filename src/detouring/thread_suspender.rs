@@ -48,7 +48,7 @@ impl ThreadSuspender {
         }
 
         let thread_id = unsafe { GetCurrentThreadId() };
-        let threads = from_snapshot(handle, Thread32First, Thread32Next)
+        let threads: Vec<HANDLE> = from_snapshot(handle, Thread32First, Thread32Next)
             .iter()
             .filter(|thread| {
                 thread.th32OwnerProcessID == process_id && thread.th32ThreadID != thread_id
@@ -60,7 +60,7 @@ impl ThreadSuspender {
         Ok(Self { threads })
     }
 
-    fn suspend(threads: &Vec<HANDLE>) {
+    fn suspend(threads: &[HANDLE]) {
         #[cfg(feature = "debug-console")]
         println!("Suspended {} threads", threads.len());
         for handle in threads {
@@ -68,7 +68,7 @@ impl ThreadSuspender {
         }
     }
 
-    fn resume(threads: &Vec<HANDLE>) {
+    fn resume(threads: &[HANDLE]) {
         #[cfg(feature = "debug-console")]
         println!("Resumed {} threads", threads.len());
         for handle in threads {
@@ -76,7 +76,7 @@ impl ThreadSuspender {
         }
     }
 
-    fn close(threads: &Vec<HANDLE>) {
+    fn close(threads: &[HANDLE]) {
         #[cfg(feature = "debug-console")]
         println!("Closed {} threads", threads.len());
         for handle in threads {
