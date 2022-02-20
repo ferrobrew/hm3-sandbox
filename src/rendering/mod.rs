@@ -35,6 +35,7 @@ use windows::{
 
 use self::overlay::OVERLAY;
 
+#[allow(dead_code)]
 #[derive(Debug)]
 struct VTables {
     pub idxgifactory2_vtbl: *const IDXGIFactory2Vtbl,
@@ -169,7 +170,7 @@ fn resize_buffers(
         "resize_buffers(buffercount: {}, width: {}, height: {}, newformat: {}, swapchainflags: {})",
         buffercount, width, height, newformat, swapchainflags
     );
-    OVERLAY.lock().unwrap().resize(&|| unsafe {
+    OVERLAY.lock().unwrap().resize(&|| {
         RESIZE_BUFFERS_DETOUR.call(
             this.clone(),
             buffercount,
@@ -187,7 +188,7 @@ fn resize_target(this: IDXGISwapChain, pnewtargetparameters: *const DXGI_MODE_DE
         "resize_target(pnewtargetparameters: 0x{:X})",
         pnewtargetparameters as usize
     );
-    unsafe { RESIZE_TARGET_DETOUR.call(this, pnewtargetparameters) }
+    RESIZE_TARGET_DETOUR.call(this, pnewtargetparameters)
 }
 
 fn enable(_: &mut Module) -> Result<()> {

@@ -21,6 +21,7 @@ enum CacheKey {
     AfterPtr(String, usize),
 }
 
+#[allow(dead_code)]
 struct SerializedCache {
     hash: u64,
     entries: Vec<(CacheKey, usize)>,
@@ -90,6 +91,7 @@ impl Module {
         unsafe { slice::from_raw_parts(self.base as *const u8, self.image_size as usize) }
     }
 
+    #[allow(dead_code)]
     pub fn backup_image(&mut self) {
         self.image_backup = self.as_bytes_from_memory().to_vec();
     }
@@ -102,6 +104,7 @@ impl Module {
         }
     }
 
+    #[allow(dead_code)]
     pub fn hash(&self) -> anyhow::Result<u64> {
         use std::{collections::hash_map::DefaultHasher, fs::File, hash::Hasher};
 
@@ -172,6 +175,7 @@ impl Module {
         Ok(self.rel_to_abs_addr(offset))
     }
 
+    #[allow(dead_code)]
     pub fn scan_after_ptr(&mut self, base: *const u8, pattern: &str) -> anyhow::Result<*mut u8> {
         let base_offset = self.abs_to_rel_addr(base) as usize;
 
@@ -199,6 +203,7 @@ impl Module {
         self.path.as_ref().map(Path::new)
     }
 
+    #[allow(dead_code)]
     pub fn directory(&self) -> Option<&Path> {
         self.path().and_then(Path::parent)
     }
@@ -222,10 +227,12 @@ impl Module {
         unsafe { self.base.offset(offset) }
     }
 
+    #[allow(dead_code)]
     pub fn handle(&self) -> HINSTANCE {
         self.handle
     }
 
+    #[allow(dead_code)]
     pub fn tls_index(&self) -> u32 {
         struct TlsDirectory {
             _tls_start: *const u8,
