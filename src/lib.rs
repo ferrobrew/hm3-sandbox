@@ -2,7 +2,7 @@ mod detouring;
 mod game;
 mod rendering;
 
-use std::{mem, thread, time::Duration};
+use std::{thread, time::Duration};
 
 use crate::detouring::prelude::*;
 use c_string::c_str;
@@ -50,7 +50,7 @@ fn main() {
             .to_uppercase()
             .contains(&"HITMAN3.EXE")
     }) {
-        let suspender = ThreadSuspender::new().expect("Failed to create thread suspender");
+        let _suspender = ThreadSuspender::new().expect("Failed to create thread suspender");
         for hook_library in [
             rendering::hook_library(),
             game::zrender::hook_library(),
@@ -63,19 +63,19 @@ fn main() {
                 loaded_libraries.push(hook_library);
             }
         }
-        mem::drop(suspender);
     }
 
     OPERATION.notify_all();
     OPERATION.wait(&mut OPERATION_MUTEX.lock());
 
-    let suspender = ThreadSuspender::new().expect("Failed to create thread suspender");
-    for hook_library in &loaded_libraries {
-        if let Err(error) = (hook_library.disable)() {
-            println!("Failed to disable hook library: {error}");
+    {
+        let _suspender = ThreadSuspender::new().expect("Failed to create thread suspender");
+        for hook_library in &loaded_libraries {
+            if let Err(error) = (hook_library.disable)() {
+                println!("Failed to disable hook library: {error}");
+            }
         }
     }
-    mem::drop(suspender);
 
     #[cfg(feature = "debug-console")]
     println!("Delaying exit...");
