@@ -21,6 +21,14 @@ fn alloc_console() {
         freopen(c_str!("CONOUT$").as_ptr(), c_str!("w").as_ptr(), stdout);
         freopen(c_str!("CONOUT$").as_ptr(), c_str!("w").as_ptr(), stderr);
     }
+    
+    
+    
+    
+    
+    
+    
+    
 }
 
 #[cfg(feature = "debug-console")]
