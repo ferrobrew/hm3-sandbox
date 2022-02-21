@@ -1,6 +1,5 @@
 use std::sync::Mutex;
 
-use super::console::Console;
 use egui::CtxRef;
 use egui_directx::{Painter, PainterDX12, WindowInput};
 use lazy_static::lazy_static;
@@ -22,7 +21,6 @@ pub struct Overlay {
     capture: bool,
     painter: Option<PainterDX12>,
     render: bool,
-    console: Console,
 }
 
 impl Overlay {
@@ -33,7 +31,6 @@ impl Overlay {
             capture: false,
             painter: None,
             render: true,
-            console: Console::new(),
         }
     }
 
@@ -89,7 +86,8 @@ impl Overlay {
                 Self::show_title_bar(ctx, self.capture);
 
                 if self.capture {
-                    self.console.show(ctx);
+                    let mut console = crate::CONSOLE.lock().unwrap();
+                    console.show(ctx);
                 }
             });
 
