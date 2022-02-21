@@ -1,3 +1,4 @@
+mod console;
 mod detouring;
 mod game;
 mod rendering;
@@ -8,6 +9,8 @@ use crate::detouring::prelude::*;
 use c_string::c_str;
 use lazy_static::lazy_static;
 use parking_lot::{Condvar, Mutex};
+
+pub use console::{MessageType, CONSOLE};
 
 #[cfg(feature = "debug-console")]
 fn alloc_console() {
@@ -63,6 +66,11 @@ fn main() {
                 loaded_libraries.push(hook_library);
             }
         }
+    }
+
+    {
+        let mut console = CONSOLE.lock().unwrap();
+        console.push_back_info("Hello from hm3-sandbox!".into());
     }
 
     OPERATION.notify_all();
