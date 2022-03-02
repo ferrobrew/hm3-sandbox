@@ -21,7 +21,6 @@ anyhow = "1.0.52"
 c_string = "0.7.2"
 chrono = "0.4"
 detour = "0.8.1"
-dll-syringe = "0.5.2"
 egui = "0.16.1"
 lazy_static = "1.4.0"
 libc = "0.2.112"
@@ -29,10 +28,10 @@ parking_lot = "0.12.0"
 paste = "1.0.6"
 patternscan = "1.2.0"
 serde = "1.0.134"
-steamlocate = "1.0.1"
 
 detours-macro = { path = "crates/detours-macro"}
 egui-directx = { path = "crates/egui-directx"}
+re-utilities = { path = "crates/re-utilities" }
 
 [dependencies.windows]
 version = "0.30.0"
