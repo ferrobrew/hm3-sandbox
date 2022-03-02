@@ -28,7 +28,6 @@ parking_lot = "0.12.0"
 paste = "1.0.6"
 patternscan = "1.2.0"
 serde = "1.0.134"
-steamlocate = "1.0.1"
 
 detours-macro = { path = "crates/detours-macro"}
 egui-directx = { path = "crates/egui-directx"}
