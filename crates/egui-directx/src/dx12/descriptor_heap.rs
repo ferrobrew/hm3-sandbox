@@ -5,7 +5,8 @@ use anyhow::{anyhow, Context, Result};
 use windows::Win32::Graphics::Direct3D12::{
     ID3D12DescriptorHeap, ID3D12Device, D3D12_CPU_DESCRIPTOR_HANDLE, D3D12_DESCRIPTOR_HEAP_DESC,
     D3D12_DESCRIPTOR_HEAP_FLAG_NONE, D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
-    D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, D3D12_GPU_DESCRIPTOR_HANDLE,
+    D3D12_DESCRIPTOR_HEAP_TYPE, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+    D3D12_GPU_DESCRIPTOR_HANDLE,
 };
 
 pub struct DescriptorHandle {
@@ -36,7 +37,7 @@ const BLOCK_SIZE: usize = mem::size_of::<usize>() * 8;
 impl DescriptorHeap {
     pub fn new(
         device: &ID3D12Device,
-        heap_type: i32,
+        heap_type: D3D12_DESCRIPTOR_HEAP_TYPE,
         heap_capacity: u32,
     ) -> Result<DescriptorHeap> {
         let heap_stride = unsafe { device.GetDescriptorHandleIncrementSize(heap_type) };

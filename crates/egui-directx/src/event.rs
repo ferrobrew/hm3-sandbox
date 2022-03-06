@@ -21,8 +21,8 @@ pub fn get_pos(hwnd: HWND, pixels_per_point: f32) -> egui::Pos2 {
     }
 }
 
-fn key_state(vkey: u16) -> bool {
-    unsafe { (GetKeyState(vkey as _) & (1 << 15)) == (1 << 15) }
+fn key_state(vkey: VIRTUAL_KEY) -> bool {
+    unsafe { (GetKeyState(vkey.0 as _) & (1 << 15)) == (1 << 15) }
 }
 
 pub fn get_modifiers() -> egui::Modifiers {
@@ -35,7 +35,7 @@ pub fn get_modifiers() -> egui::Modifiers {
     }
 }
 
-pub fn to_key(vkey: u16) -> Option<egui::Key> {
+pub fn to_key(vkey: VIRTUAL_KEY) -> Option<egui::Key> {
     match vkey {
         VK_DOWN => Some(egui::Key::ArrowDown),
         VK_LEFT => Some(egui::Key::ArrowLeft),
@@ -52,16 +52,16 @@ pub fn to_key(vkey: u16) -> Option<egui::Key> {
         VK_END => Some(egui::Key::End),
         VK_PRIOR => Some(egui::Key::PageUp),
         VK_NEXT => Some(egui::Key::PageDown),
-        VK_NUMPAD0 | 0x30 => Some(egui::Key::Num0),
-        VK_NUMPAD1 | 0x31 => Some(egui::Key::Num1),
-        VK_NUMPAD2 | 0x32 => Some(egui::Key::Num2),
-        VK_NUMPAD3 | 0x33 => Some(egui::Key::Num3),
-        VK_NUMPAD4 | 0x34 => Some(egui::Key::Num4),
-        VK_NUMPAD5 | 0x35 => Some(egui::Key::Num5),
-        VK_NUMPAD6 | 0x36 => Some(egui::Key::Num6),
-        VK_NUMPAD7 | 0x37 => Some(egui::Key::Num7),
-        VK_NUMPAD8 | 0x38 => Some(egui::Key::Num8),
-        VK_NUMPAD9 | 0x39 => Some(egui::Key::Num9),
+        VK_NUMPAD0 | VK_0 => Some(egui::Key::Num0),
+        VK_NUMPAD1 | VK_1 => Some(egui::Key::Num1),
+        VK_NUMPAD2 | VK_2 => Some(egui::Key::Num2),
+        VK_NUMPAD3 | VK_3 => Some(egui::Key::Num3),
+        VK_NUMPAD4 | VK_4 => Some(egui::Key::Num4),
+        VK_NUMPAD5 | VK_5 => Some(egui::Key::Num5),
+        VK_NUMPAD6 | VK_6 => Some(egui::Key::Num6),
+        VK_NUMPAD7 | VK_7 => Some(egui::Key::Num7),
+        VK_NUMPAD8 | VK_8 => Some(egui::Key::Num8),
+        VK_NUMPAD9 | VK_9 => Some(egui::Key::Num9),
         VK_A => Some(egui::Key::A),
         VK_B => Some(egui::Key::B),
         VK_C => Some(egui::Key::C),

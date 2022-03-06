@@ -3,12 +3,15 @@ use std::{
     path::Path, slice,
 };
 
-use windows::Win32::{
-    Foundation::{HINSTANCE, PWSTR},
-    System::{
-        LibraryLoader::GetModuleFileNameW,
-        ProcessStatus::{K32EnumProcessModules, K32GetModuleInformation, MODULEINFO},
-        Threading::GetCurrentProcess,
+use windows::{
+    core::PWSTR,
+    Win32::{
+        Foundation::HINSTANCE,
+        System::{
+            LibraryLoader::GetModuleFileNameW,
+            ProcessStatus::{K32EnumProcessModules, K32GetModuleInformation, MODULEINFO},
+            Threading::GetCurrentProcess,
+        },
     },
 };
 

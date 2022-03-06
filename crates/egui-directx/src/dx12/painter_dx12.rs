@@ -7,33 +7,38 @@ use std::{
 
 use anyhow::{anyhow, Context, Result};
 use egui::{epaint::Vertex, vec2, ClippedMesh, FontImage, TextureId};
-use windows::Win32::{
-    Foundation::{BOOL, PSTR, RECT},
-    Graphics::{
-        Direct3D::{Fxc::D3DCompile2, ID3DBlob},
-        Direct3D12::{
-            D3D12SerializeRootSignature, ID3D12CommandQueue, ID3D12Device, ID3D12PipelineState,
-            ID3D12RootSignature, D3D12_BLEND_DESC, D3D12_BLEND_INV_SRC_ALPHA, D3D12_BLEND_ONE,
-            D3D12_BLEND_OP_ADD, D3D12_COLOR_WRITE_ENABLE_ALL, D3D12_COMPARISON_FUNC_ALWAYS,
-            D3D12_CULL_MODE_NONE, D3D12_DEPTH_STENCIL_DESC, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-            D3D12_DESCRIPTOR_HEAP_TYPE_RTV, D3D12_DESCRIPTOR_RANGE,
-            D3D12_DESCRIPTOR_RANGE_TYPE_SRV, D3D12_FILL_MODE_SOLID,
-            D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_GRAPHICS_PIPELINE_STATE_DESC,
-            D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, D3D12_INPUT_ELEMENT_DESC,
-            D3D12_INPUT_LAYOUT_DESC, D3D12_LOGIC_OP_NOOP, D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
-            D3D12_RASTERIZER_DESC, D3D12_RENDER_TARGET_BLEND_DESC, D3D12_ROOT_PARAMETER,
-            D3D12_ROOT_PARAMETER_TYPE_CBV, D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
-            D3D12_ROOT_SIGNATURE_DESC,
-            D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT, D3D12_SHADER_BYTECODE,
-            D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK, D3D12_STATIC_SAMPLER_DESC,
-            D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D_ROOT_SIGNATURE_VERSION_1,
-        },
-        Dxgi::{
-            Common::{
-                DXGI_FORMAT_R32G32_FLOAT, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_UNKNOWN,
-                DXGI_SAMPLE_DESC,
+use windows::{
+    core::PCSTR,
+    Win32::{
+        Foundation::{BOOL, RECT},
+        Graphics::{
+            Direct3D::{Fxc::D3DCompile2, ID3DBlob},
+            Direct3D12::{
+                D3D12SerializeRootSignature, ID3D12CommandQueue, ID3D12Device, ID3D12PipelineState,
+                ID3D12RootSignature, D3D12_BLEND_DESC, D3D12_BLEND_INV_SRC_ALPHA, D3D12_BLEND_ONE,
+                D3D12_BLEND_OP_ADD, D3D12_COLOR_WRITE_ENABLE_ALL, D3D12_COMPARISON_FUNC_ALWAYS,
+                D3D12_CULL_MODE_NONE, D3D12_DEPTH_STENCIL_DESC,
+                D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
+                D3D12_DESCRIPTOR_RANGE, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, D3D12_FILL_MODE_SOLID,
+                D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_GRAPHICS_PIPELINE_STATE_DESC,
+                D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, D3D12_INPUT_ELEMENT_DESC,
+                D3D12_INPUT_LAYOUT_DESC, D3D12_LOGIC_OP_NOOP,
+                D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE, D3D12_RASTERIZER_DESC,
+                D3D12_RENDER_TARGET_BLEND_DESC, D3D12_ROOT_PARAMETER,
+                D3D12_ROOT_PARAMETER_TYPE_CBV, D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
+                D3D12_ROOT_SIGNATURE_DESC,
+                D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT,
+                D3D12_SHADER_BYTECODE, D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK,
+                D3D12_STATIC_SAMPLER_DESC, D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+                D3D_ROOT_SIGNATURE_VERSION_1,
             },
-            IDXGISwapChain4,
+            Dxgi::{
+                Common::{
+                    DXGI_FORMAT_R32G32_FLOAT, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_UNKNOWN,
+                    DXGI_SAMPLE_DESC,
+                },
+                IDXGISwapChain4,
+            },
         },
     },
 };
@@ -158,8 +163,8 @@ fn compile_shader(source: &[u8], shader_model: &'static str) -> Result<ID3DBlob>
             None,
             ptr::null(),
             None,
-            PSTR(b"main\0".as_ptr() as _),
-            PSTR(shader_model.as_ptr() as _),
+            "main",
+            shader_model,
             0,
             0,
             0,
@@ -200,20 +205,20 @@ fn create_pipeline_state(
 
     let input_elements = [
         D3D12_INPUT_ELEMENT_DESC {
-            SemanticName: PSTR(b"POSITION\0".as_ptr() as _),
+            SemanticName: PCSTR(b"POSITION\0".as_ptr() as _),
             Format: DXGI_FORMAT_R32G32_FLOAT,
             InputSlotClass: D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
             ..Default::default()
         },
         D3D12_INPUT_ELEMENT_DESC {
-            SemanticName: PSTR(b"TEXCOORD\0".as_ptr() as _),
+            SemanticName: PCSTR(b"TEXCOORD\0".as_ptr() as _),
             Format: DXGI_FORMAT_R32G32_FLOAT,
             AlignedByteOffset: 8,
             InputSlotClass: D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
             ..Default::default()
         },
         D3D12_INPUT_ELEMENT_DESC {
-            SemanticName: PSTR(b"COLOR\0".as_ptr() as _),
+            SemanticName: PCSTR(b"COLOR\0".as_ptr() as _),
             Format: DXGI_FORMAT_R8G8B8A8_UNORM,
             AlignedByteOffset: 16,
             InputSlotClass: D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
@@ -244,7 +249,7 @@ fn create_pipeline_state(
                         DestBlendAlpha: D3D12_BLEND_INV_SRC_ALPHA,
                         BlendOpAlpha: D3D12_BLEND_OP_ADD,
                         LogicOp: D3D12_LOGIC_OP_NOOP,
-                        RenderTargetWriteMask: D3D12_COLOR_WRITE_ENABLE_ALL as _,
+                        RenderTargetWriteMask: D3D12_COLOR_WRITE_ENABLE_ALL.0 as _,
                     },
                     D3D12_RENDER_TARGET_BLEND_DESC::default(),
                     D3D12_RENDER_TARGET_BLEND_DESC::default(),

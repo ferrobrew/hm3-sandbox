@@ -1,6 +1,9 @@
-use windows::Win32::Graphics::Direct3D12::{
-    ID3D12Device, ID3D12Resource, D3D12_CPU_DESCRIPTOR_HANDLE, D3D12_RENDER_TARGET_VIEW_DESC,
-    D3D12_RTV_DIMENSION_TEXTURE2D,
+use windows::Win32::Graphics::{
+    Direct3D12::{
+        ID3D12Device, ID3D12Resource, D3D12_CPU_DESCRIPTOR_HANDLE, D3D12_RENDER_TARGET_VIEW_DESC,
+        D3D12_RTV_DIMENSION_TEXTURE2D,
+    },
+    Dxgi::Common::DXGI_FORMAT,
 };
 
 use super::heap_resource::HeapResource;
@@ -14,7 +17,7 @@ impl BackBuffer {
     pub fn new(
         device: &ID3D12Device,
         resource: ID3D12Resource,
-        format: u32,
+        format: DXGI_FORMAT,
         heap_resource: HeapResource,
     ) -> Self {
         unsafe {
