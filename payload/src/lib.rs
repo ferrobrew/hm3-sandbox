@@ -41,32 +41,29 @@ lazy_static! {
     static ref OPERATION_MUTEX: Mutex<()> = Mutex::new(());
 }
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     #[cfg(feature = "debug-console")]
     alloc_console();
 
-    let mut loaded_libraries = vec![];
+    let mut module = Module::get_all()
+        .find(|x| {
+            x.filename()
+                .unwrap_or_default()
+                .to_uppercase()
+                .contains(&"HITMAN3.EXE")
+        })
+        .context("Failed to find game module")?;
 
-    if let Some(mut module) = Module::get_all().find(|x| {
-        x.filename()
-            .unwrap_or_default()
-            .to_uppercase()
-            .contains(&"HITMAN3.EXE")
-    }) {
-        let _suspender = ThreadSuspender::new().expect("Failed to create thread suspender");
-        for hook_library in [
+    let loaded_libraries = ThreadSuspender::for_block(|| {
+        [
             rendering::hook_library(),
             game::zrender::hook_library(),
             game::zapplication_engine_win32::hook_library(),
-        ] {
-            if let Err(error) = (hook_library.enable)(&mut module) {
-                println!("Failed to enable hook library: {error}");
-                break;
-            } else {
-                loaded_libraries.push(hook_library);
-            }
-        }
-    }
+        ]
+        .into_iter()
+        .map(|hl| (hl.enable)(&mut module).map(|_| hl))
+        .collect::<anyhow::Result<Vec<_>>>()
+    })?;
 
     {
         let mut console = CONSOLE.lock().unwrap();
@@ -76,14 +73,12 @@ fn main() {
     OPERATION.notify_all();
     OPERATION.wait(&mut OPERATION_MUTEX.lock());
 
-    {
-        let _suspender = ThreadSuspender::new().expect("Failed to create thread suspender");
+    ThreadSuspender::for_block(|| {
         for hook_library in &loaded_libraries {
-            if let Err(error) = (hook_library.disable)() {
-                println!("Failed to disable hook library: {error}");
-            }
+            (hook_library.disable)()?;
         }
-    }
+        Ok(())
+    })?;
 
     #[cfg(feature = "debug-console")]
     println!("Delaying exit...");
@@ -92,12 +87,14 @@ fn main() {
     #[cfg(feature = "debug-console")]
     free_console();
     OPERATION.notify_all();
+
+    Ok(())
 }
 
 #[no_mangle]
 #[allow(clippy::missing_safety_doc)]
 pub unsafe extern "system" fn load(_: *mut u64, _: *mut u64) {
-    thread::spawn(main);
+    thread::spawn(|| main().unwrap());
     OPERATION.wait(&mut OPERATION_MUTEX.lock());
 }
 
