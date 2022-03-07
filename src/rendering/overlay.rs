@@ -1,7 +1,7 @@
 use std::sync::Mutex;
 
 use egui::CtxRef;
-use egui_directx::{Painter, PainterDX12, WindowInput};
+use egui_directx::{Painter, PainterDX12, Win32, WindowInput};
 use lazy_static::lazy_static;
 use windows::Win32::{
     Foundation::{HWND, LPARAM, WPARAM},
@@ -10,7 +10,7 @@ use windows::Win32::{
         Dxgi::IDXGISwapChain4,
     },
     UI::{
-        Input::KeyboardAndMouse::VK_OEM_3,
+        Input::KeyboardAndMouse::{VIRTUAL_KEY, VK_OEM_3},
         WindowsAndMessaging::{WM_DPICHANGED, WM_KEYUP, WM_SIZE},
     },
 };
@@ -39,7 +39,7 @@ impl Overlay {
             self.input = Some(WindowInput::new(hwnd));
         }
 
-        if msg == WM_KEYUP && wparam.0 as u16 == VK_OEM_3 {
+        if msg == WM_KEYUP && VIRTUAL_KEY(wparam.loword()) == VK_OEM_3 {
             self.capture = !self.capture;
         }
 

@@ -6,6 +6,7 @@ use windows::Win32::{
     UI::{
         Controls::WM_MOUSELEAVE,
         HiDpi::GetDpiForWindow,
+        Input::KeyboardAndMouse::VIRTUAL_KEY,
         WindowsAndMessaging::{
             GetClientRect, USER_DEFAULT_SCREEN_DPI, WHEEL_DELTA, WM_CHAR, WM_DPICHANGED,
             WM_KEYDOWN, WM_KEYUP, WM_LBUTTONDBLCLK, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDBLCLK,
@@ -160,7 +161,7 @@ impl WindowInput {
                 true
             }
             WM_KEYDOWN => {
-                if let Some(key) = event::to_key(wparam.loword()) {
+                if let Some(key) = event::to_key(VIRTUAL_KEY(wparam.loword())) {
                     let modifiers = event::get_modifiers();
                     self.raw.events.push(Event::Key {
                         key,
@@ -171,7 +172,7 @@ impl WindowInput {
                 true
             }
             WM_KEYUP => {
-                if let Some(key) = event::to_key(wparam.loword()) {
+                if let Some(key) = event::to_key(VIRTUAL_KEY(wparam.loword())) {
                     let modifiers = event::get_modifiers();
                     self.raw.events.push(Event::Key {
                         key,

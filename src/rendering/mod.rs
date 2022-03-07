@@ -4,23 +4,23 @@ use crate::{detouring::prelude::*, game::zrender::RENDER_MANAGER, HookLibrary};
 use anyhow::Result;
 use std::ptr;
 use windows::{
-    core::{Interface, HRESULT},
+    core::{Interface, HRESULT, PCSTR},
     Win32::{
-        Foundation::{HWND, LPARAM, LRESULT, PSTR, WPARAM},
+        Foundation::{HWND, LPARAM, LRESULT, WPARAM},
         Graphics::{
             Direct3D::D3D_FEATURE_LEVEL_12_0,
             Direct3D12::{
-                D3D12CreateDevice, ID3D12CommandAllocator, ID3D12CommandAllocatorVtbl,
-                ID3D12CommandList, ID3D12CommandListVtbl, ID3D12CommandQueue,
-                ID3D12CommandQueueVtbl, ID3D12Device, ID3D12DeviceVtbl,
+                D3D12CreateDevice, ID3D12CommandAllocator, ID3D12CommandAllocator_Vtbl,
+                ID3D12CommandList, ID3D12CommandList_Vtbl, ID3D12CommandQueue,
+                ID3D12CommandQueue_Vtbl, ID3D12Device, ID3D12Device_Vtbl,
                 D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12_COMMAND_QUEUE_DESC,
             },
             Dxgi::{
                 Common::{
                     DXGI_FORMAT, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_MODE_DESC, DXGI_SAMPLE_DESC,
                 },
-                CreateDXGIFactory2, IDXGIAdapter, IDXGIAdapterVtbl, IDXGIFactory2,
-                IDXGIFactory2Vtbl, IDXGISwapChain, IDXGISwapChain1Vtbl, IDXGISwapChain4,
+                CreateDXGIFactory2, IDXGIAdapter, IDXGIAdapter_Vtbl, IDXGIFactory2,
+                IDXGIFactory2_Vtbl, IDXGISwapChain, IDXGISwapChain1_Vtbl, IDXGISwapChain4,
                 DXGI_CREATE_FACTORY_DEBUG, DXGI_SWAP_CHAIN_DESC1, DXGI_SWAP_EFFECT_FLIP_DISCARD,
                 DXGI_USAGE_RENDER_TARGET_OUTPUT,
             },
@@ -38,13 +38,13 @@ use self::overlay::OVERLAY;
 #[allow(dead_code)]
 #[derive(Debug)]
 struct VTables {
-    pub idxgifactory2_vtbl: *const IDXGIFactory2Vtbl,
-    pub idxgiadapter_vtbl: *const IDXGIAdapterVtbl,
-    pub id3d12_device_vtbl: *const ID3D12DeviceVtbl,
-    pub id3d12_command_queue_vtbl: *const ID3D12CommandQueueVtbl,
-    pub id3d12_command_allocator_vtbl: *const ID3D12CommandAllocatorVtbl,
-    pub id3d12_command_list_vtbl: *const ID3D12CommandListVtbl,
-    pub idxgiswapchain1_vtbl: *const IDXGISwapChain1Vtbl,
+    pub idxgifactory2_vtbl: *const IDXGIFactory2_Vtbl,
+    pub idxgiadapter_vtbl: *const IDXGIAdapter_Vtbl,
+    pub id3d12_device_vtbl: *const ID3D12Device_Vtbl,
+    pub id3d12_command_queue_vtbl: *const ID3D12CommandQueue_Vtbl,
+    pub id3d12_command_allocator_vtbl: *const ID3D12CommandAllocator_Vtbl,
+    pub id3d12_command_list_vtbl: *const ID3D12CommandList_Vtbl,
+    pub idxgiswapchain1_vtbl: *const IDXGISwapChain1_Vtbl,
 }
 
 unsafe extern "system" fn def_wnd_proc(
@@ -83,7 +83,7 @@ fn get_vtables() -> Result<VTables> {
             style: CS_HREDRAW | CS_VREDRAW,
             lpfnWndProc: Some(def_wnd_proc),
             hInstance: GetModuleHandleA(None),
-            lpszClassName: PSTR(b"hm3-sandbox\0".as_ptr() as _),
+            lpszClassName: PCSTR(b"hm3-sandbox\0".as_ptr() as _),
             ..Default::default()
         };
 
@@ -92,7 +92,7 @@ fn get_vtables() -> Result<VTables> {
         let window = CreateWindowExA(
             Default::default(),
             window_class.lpszClassName,
-            PSTR("hm3-sandbox\0".as_ptr() as _),
+            PCSTR("hm3-sandbox\0".as_ptr() as _),
             WS_OVERLAPPEDWINDOW,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
@@ -168,7 +168,7 @@ fn resize_buffers(
     #[cfg(feature = "debug-logging")]
     println!(
         "resize_buffers(buffercount: {}, width: {}, height: {}, newformat: {}, swapchainflags: {})",
-        buffercount, width, height, newformat, swapchainflags
+        buffercount, width, height, newformat.0, swapchainflags
     );
     OVERLAY.lock().unwrap().resize(&|| {
         RESIZE_BUFFERS_DETOUR.call(
@@ -196,19 +196,19 @@ fn enable(_: &mut Module) -> Result<()> {
         let vtables = get_vtables()?;
 
         PRESENT_DETOUR.initialize(
-            std::mem::transmute((*vtables.idxgiswapchain1_vtbl).8),
+            std::mem::transmute((*vtables.idxgiswapchain1_vtbl).base.Present),
             present,
         )?;
         PRESENT_DETOUR.enable()?;
 
         RESIZE_BUFFERS_DETOUR.initialize(
-            std::mem::transmute((*vtables.idxgiswapchain1_vtbl).13),
+            std::mem::transmute((*vtables.idxgiswapchain1_vtbl).base.ResizeBuffers),
             resize_buffers,
         )?;
         RESIZE_BUFFERS_DETOUR.enable()?;
 
         RESIZE_TARGET_DETOUR.initialize(
-            std::mem::transmute((*vtables.idxgiswapchain1_vtbl).14),
+            std::mem::transmute((*vtables.idxgiswapchain1_vtbl).base.ResizeTarget),
             resize_target,
         )?;
         RESIZE_TARGET_DETOUR.enable()?;

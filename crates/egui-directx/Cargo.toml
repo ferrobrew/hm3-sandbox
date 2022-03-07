@@ -10,8 +10,9 @@ epi = "0.16.0"
 winit = "0.26.1"
 
 [dependencies.windows]
-version = "0.30.0"
+version = "0.33.0"
 features = [
+    "alloc",
     "Win32_Foundation",
     "Win32_Graphics_Direct3D_Fxc",
     "Win32_Graphics_Direct3D",
