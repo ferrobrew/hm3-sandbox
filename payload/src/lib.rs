@@ -9,6 +9,7 @@ use crate::detouring::prelude::*;
 use c_string::c_str;
 use lazy_static::lazy_static;
 use parking_lot::{Condvar, Mutex};
+use re_utilities::{module::Module, ThreadSuspender};
 
 pub use console::{MessageType, CONSOLE};
 
@@ -44,10 +45,9 @@ fn main() {
     #[cfg(feature = "debug-console")]
     alloc_console();
 
-    let mut modules = Module::get_all();
     let mut loaded_libraries = vec![];
 
-    if let Some(module) = modules.iter_mut().find(|x| {
+    if let Some(mut module) = Module::get_all().find(|x| {
         x.filename()
             .unwrap_or_default()
             .to_uppercase()
@@ -59,7 +59,7 @@ fn main() {
             game::zrender::hook_library(),
             game::zapplication_engine_win32::hook_library(),
         ] {
-            if let Err(error) = (hook_library.enable)(module) {
+            if let Err(error) = (hook_library.enable)(&mut module) {
                 println!("Failed to enable hook library: {error}");
                 break;
             } else {
