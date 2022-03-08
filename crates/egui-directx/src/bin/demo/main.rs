@@ -30,8 +30,8 @@ use winit::{
 };
 
 struct App {
-    device: ID3D12Device,
-    command_queue: ID3D12CommandQueue,
+    _device: ID3D12Device,
+    _command_queue: ID3D12CommandQueue,
     swap_chain: IDXGISwapChain4,
     painter: PainterDX12,
 }
@@ -60,7 +60,7 @@ impl App {
                 x.unwrap()
             };
             let command_queue: ID3D12CommandQueue =
-                unsafe { device.CreateCommandQueue(&D3D12_COMMAND_QUEUE_DESC::default())? };
+                device.CreateCommandQueue(&D3D12_COMMAND_QUEUE_DESC::default())?;
             let swap_chain: IDXGISwapChain4 = factory
                 .CreateSwapChainForHwnd(
                     &command_queue,
@@ -85,8 +85,8 @@ impl App {
                 PainterDX12::new(device.clone(), command_queue.clone(), swap_chain.clone())?;
 
             Ok(App {
-                device,
-                command_queue,
+                _device: device,
+                _command_queue: command_queue,
                 swap_chain,
                 painter,
             })
