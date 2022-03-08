@@ -6,6 +6,7 @@ mod rendering;
 use std::{thread, time::Duration};
 
 use crate::detouring::prelude::*;
+use anyhow::Context;
 use c_string::c_str;
 use lazy_static::lazy_static;
 use parking_lot::{Condvar, Mutex};
