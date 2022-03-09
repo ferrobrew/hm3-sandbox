@@ -5,7 +5,6 @@ mod rendering;
 
 use std::{thread, time::Duration};
 
-use crate::detouring::prelude::*;
 use anyhow::Context;
 use c_string::c_str;
 use lazy_static::lazy_static;
@@ -55,15 +54,18 @@ fn main() -> anyhow::Result<()> {
         })
         .context("Failed to find game module")?;
 
-    let loaded_libraries = ThreadSuspender::for_block(|| {
-        [
+    let mut loaded_libraries = ThreadSuspender::for_block(|| {
+        let mut hook_libraries = vec![
             rendering::hook_library(),
             game::zrender::hook_library(),
             game::zapplication_engine_win32::hook_library(),
-        ]
-        .into_iter()
-        .map(|hl| (hl.enable)(&mut module).map(|_| hl))
-        .collect::<anyhow::Result<Vec<_>>>()
+        ];
+
+        for hook_library in &mut hook_libraries {
+            hook_library.set_enabled(&mut module, true)?;
+        }
+
+        Ok(hook_libraries)
     })?;
 
     {
@@ -75,8 +77,8 @@ fn main() -> anyhow::Result<()> {
     OPERATION.wait(&mut OPERATION_MUTEX.lock());
 
     ThreadSuspender::for_block(|| {
-        for hook_library in &loaded_libraries {
-            (hook_library.disable)()?;
+        for hook_library in &mut loaded_libraries {
+            hook_library.set_enabled(&mut module, false)?;
         }
         Ok(())
     })?;

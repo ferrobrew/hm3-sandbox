@@ -1,6 +1,6 @@
 pub mod overlay;
 
-use crate::{detouring::prelude::*, game::zrender::RENDER_MANAGER, HookLibrary};
+use crate::{detouring::prelude::*, game::zrender::RENDER_MANAGER};
 use anyhow::Result;
 use std::ptr;
 use windows::{
@@ -191,46 +191,35 @@ fn resize_target(this: IDXGISwapChain, pnewtargetparameters: *const DXGI_MODE_DE
     RESIZE_TARGET_DETOUR.call(this, pnewtargetparameters)
 }
 
-fn enable(_: &mut Module) -> Result<()> {
-    unsafe {
-        let vtables = get_vtables()?;
-
-        PRESENT_DETOUR.initialize(
-            std::mem::transmute((*vtables.idxgiswapchain1_vtbl).base.Present),
-            present,
-        )?;
-        PRESENT_DETOUR.enable()?;
-
-        RESIZE_BUFFERS_DETOUR.initialize(
-            std::mem::transmute((*vtables.idxgiswapchain1_vtbl).base.ResizeBuffers),
-            resize_buffers,
-        )?;
-        RESIZE_BUFFERS_DETOUR.enable()?;
-
-        RESIZE_TARGET_DETOUR.initialize(
-            std::mem::transmute((*vtables.idxgiswapchain1_vtbl).base.ResizeTarget),
-            resize_target,
-        )?;
-        RESIZE_TARGET_DETOUR.enable()?;
-
-        #[cfg(feature = "debug-logging")]
-        println!("Hooked DX12 vtbls:\n{:?}", vtables);
-    }
-    Ok(())
-}
-
-fn disable() -> Result<()> {
-    unsafe {
-        PRESENT_DETOUR.disable()?;
-        RESIZE_BUFFERS_DETOUR.disable()?;
-        RESIZE_TARGET_DETOUR.disable()?;
-
-        #[cfg(feature = "debug-logging")]
-        println!("Unhooked DX12 vtbls");
-    }
-    Ok(())
-}
-
 pub fn hook_library() -> HookLibrary {
-    HookLibrary { enable, disable }
+    HookLibrary::new()
+        .with_enable(|_| unsafe {
+            use std::mem::transmute;
+
+            let vtables = get_vtables()?;
+            let vtbl = &(*vtables.idxgiswapchain1_vtbl).base;
+
+            PRESENT_DETOUR.initialize(transmute(vtbl.Present), present)?;
+            RESIZE_BUFFERS_DETOUR.initialize(transmute(vtbl.ResizeBuffers), resize_buffers)?;
+            RESIZE_TARGET_DETOUR.initialize(transmute(vtbl.ResizeTarget), resize_target)?;
+
+            PRESENT_DETOUR.enable()?;
+            RESIZE_BUFFERS_DETOUR.enable()?;
+            RESIZE_TARGET_DETOUR.enable()?;
+
+            #[cfg(feature = "debug-logging")]
+            println!("Hooked DX12 vtbls:\n{:?}", vtables);
+
+            Ok(())
+        })
+        .with_disable(|| unsafe {
+            PRESENT_DETOUR.disable()?;
+            RESIZE_BUFFERS_DETOUR.disable()?;
+            RESIZE_TARGET_DETOUR.disable()?;
+
+            #[cfg(feature = "debug-logging")]
+            println!("Unhooked DX12 vtbls");
+
+            Ok(())
+        })
 }
