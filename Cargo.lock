@@ -1419,6 +1419,7 @@ name = "re-utilities"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "detour",
  "dll-syringe",
  "game-scanner",
  "patternscan",

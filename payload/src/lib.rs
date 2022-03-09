@@ -62,7 +62,11 @@ fn main() -> anyhow::Result<()> {
         ];
 
         for hook_library in &mut hook_libraries {
-            hook_library.set_enabled(&mut module, true)?;
+            hook_library.init(&mut module)?;
+        }
+
+        for hook_library in &mut hook_libraries {
+            hook_library.set_enabled(true)?;
         }
 
         Ok(hook_libraries)
@@ -78,7 +82,7 @@ fn main() -> anyhow::Result<()> {
 
     ThreadSuspender::for_block(|| {
         for hook_library in &mut loaded_libraries {
-            hook_library.set_enabled(&mut module, false)?;
+            hook_library.set_enabled(false)?;
         }
         Ok(())
     })?;

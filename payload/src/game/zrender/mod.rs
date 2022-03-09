@@ -39,7 +39,7 @@ pub struct ZRenderManager {
 pub static mut RENDER_MANAGER: Option<*const ZRenderManager> = None;
 
 pub fn hook_library() -> HookLibrary {
-    HookLibrary::new().with_enable(|module| unsafe {
+    HookLibrary::new().on_init(|module| unsafe {
         let render_manager = module
             .scan_for_relative_callsite(
                 "48 8D 0D ? ? ? ? E8 ? ? ? ? 48 8B 1D ? ? ? ? 48 8D 4B 60 FF 15",

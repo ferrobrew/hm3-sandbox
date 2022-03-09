@@ -193,33 +193,21 @@ fn resize_target(this: IDXGISwapChain, pnewtargetparameters: *const DXGI_MODE_DE
 
 pub fn hook_library() -> HookLibrary {
     HookLibrary::new()
-        .with_enable(|_| unsafe {
+        .on_init(|_| unsafe {
             use std::mem::transmute;
 
-            let vtables = get_vtables()?;
-            let vtbl = &(*vtables.idxgiswapchain1_vtbl).base;
+            let vtbl = {
+                let vtables = get_vtables()?;
+                &(*vtables.idxgiswapchain1_vtbl).base
+            };
 
             PRESENT_DETOUR.initialize(transmute(vtbl.Present), present)?;
             RESIZE_BUFFERS_DETOUR.initialize(transmute(vtbl.ResizeBuffers), resize_buffers)?;
             RESIZE_TARGET_DETOUR.initialize(transmute(vtbl.ResizeTarget), resize_target)?;
 
-            PRESENT_DETOUR.enable()?;
-            RESIZE_BUFFERS_DETOUR.enable()?;
-            RESIZE_TARGET_DETOUR.enable()?;
-
-            #[cfg(feature = "debug-logging")]
-            println!("Hooked DX12 vtbls:\n{:?}", vtables);
-
             Ok(())
         })
-        .with_disable(|| unsafe {
-            PRESENT_DETOUR.disable()?;
-            RESIZE_BUFFERS_DETOUR.disable()?;
-            RESIZE_TARGET_DETOUR.disable()?;
-
-            #[cfg(feature = "debug-logging")]
-            println!("Unhooked DX12 vtbls");
-
-            Ok(())
-        })
+        .with_detour(&PRESENT_DETOUR)
+        .with_detour(&RESIZE_BUFFERS_DETOUR)
+        .with_detour(&RESIZE_TARGET_DETOUR)
 }
