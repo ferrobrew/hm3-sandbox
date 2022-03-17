@@ -1,7 +1,7 @@
-use std::mem;
-
 use crate::detouring::prelude::*;
-use anyhow::{Context, Result};
+
+use anyhow::Context;
+use std::mem;
 use windows::Win32::{
     Foundation::HANDLE,
     Graphics::Direct3D12::{ID3D12CommandQueue, ID3D12Device, ID3D12Fence},
@@ -38,8 +38,8 @@ pub struct ZRenderManager {
 
 pub static mut RENDER_MANAGER: Option<*const ZRenderManager> = None;
 
-pub fn enable(module: &mut Module) -> Result<()> {
-    unsafe {
+pub fn hook_library() -> HookLibrary {
+    HookLibrary::new().on_init(|module| unsafe {
         let render_manager = module
             .scan_for_relative_callsite(
                 "48 8D 0D ? ? ? ? E8 ? ? ? ? 48 8B 1D ? ? ? ? 48 8D 4B 60 FF 15",
@@ -49,14 +49,6 @@ pub fn enable(module: &mut Module) -> Result<()> {
 
         RENDER_MANAGER = Some(mem::transmute(render_manager));
         println!("Hooked render_manager: 0x{:x}", *render_manager);
-    }
-    Ok(())
-}
-
-pub fn disable() -> Result<()> {
-    Ok(())
-}
-
-pub fn hook_library() -> HookLibrary {
-    HookLibrary { enable, disable }
+        Ok(())
+    })
 }

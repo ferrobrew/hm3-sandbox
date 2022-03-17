@@ -13,7 +13,7 @@ use windows::{
                 ID3D12Device, D3D12_COMMAND_QUEUE_DESC,
             },
             Dxgi::{
-                Common::{DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_SAMPLE_DESC},
+                Common::{DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_UNKNOWN, DXGI_SAMPLE_DESC},
                 CreateDXGIFactory2, IDXGIAdapter, IDXGIFactory4, IDXGISwapChain4,
                 DXGI_CREATE_FACTORY_DEBUG, DXGI_SWAP_CHAIN_DESC1, DXGI_SWAP_EFFECT_FLIP_DISCARD,
                 DXGI_USAGE_RENDER_TARGET_OUTPUT,
@@ -30,8 +30,8 @@ use winit::{
 };
 
 struct App {
-    device: ID3D12Device,
-    command_queue: ID3D12CommandQueue,
+    _device: ID3D12Device,
+    _command_queue: ID3D12CommandQueue,
     swap_chain: IDXGISwapChain4,
     painter: PainterDX12,
 }
@@ -60,7 +60,7 @@ impl App {
                 x.unwrap()
             };
             let command_queue: ID3D12CommandQueue =
-                unsafe { device.CreateCommandQueue(&D3D12_COMMAND_QUEUE_DESC::default())? };
+                device.CreateCommandQueue(&D3D12_COMMAND_QUEUE_DESC::default())?;
             let swap_chain: IDXGISwapChain4 = factory
                 .CreateSwapChainForHwnd(
                     &command_queue,
@@ -85,8 +85,8 @@ impl App {
                 PainterDX12::new(device.clone(), command_queue.clone(), swap_chain.clone())?;
 
             Ok(App {
-                device,
-                command_queue,
+                _device: device,
+                _command_queue: command_queue,
                 swap_chain,
                 painter,
             })
@@ -94,13 +94,10 @@ impl App {
     }
 
     fn resize(&mut self, width: u32, height: u32) -> Result<()> {
-        self.painter.resize_buffers(|| {
-            unsafe {
-                self.swap_chain
-                    .ResizeBuffers(0, width, height, 0, 0)
-                    .expect("Failed to resize buffers")
-            };
-        })
+        Ok(self.painter.resize_buffers(|| unsafe {
+            self.swap_chain
+                .ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0)
+        })??)
     }
 
     fn render(&mut self) -> Result<()> {

@@ -46,9 +46,11 @@ impl WindowInput {
             }
         };
 
-        let mut raw = RawInput::default();
-        raw.pixels_per_point = Some(pixels_per_point);
-        raw.screen_rect = Some(screen_rect);
+        let raw = RawInput {
+            pixels_per_point: Some(pixels_per_point),
+            screen_rect: Some(screen_rect),
+            ..Default::default()
+        };
 
         Self {
             hwnd,
@@ -78,7 +80,7 @@ impl WindowInput {
     }
 
     pub fn wnd_proc(&mut self, msg: u32, wparam: WPARAM, lparam: LPARAM) -> bool {
-        return match msg {
+        match msg {
             WM_DPICHANGED => {
                 let width = self.screen_rect.width() as f32 * self.pixels_per_point;
                 let height = self.screen_rect.height() * self.pixels_per_point;
@@ -190,6 +192,6 @@ impl WindowInput {
                 true
             }
             _ => false,
-        };
+        }
     }
 }

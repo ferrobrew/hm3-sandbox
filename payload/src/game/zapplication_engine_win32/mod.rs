@@ -1,4 +1,3 @@
-use anyhow::Result;
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 
 use crate::{detouring::prelude::*, rendering::overlay::OVERLAY};
@@ -15,23 +14,6 @@ pub fn wnd_proc(this: usize, hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARA
     }
 }
 
-pub fn enable(module: &mut Module) -> Result<()> {
-    for binder in [&WND_PROC_BINDER] {
-        binder.bind(module)?;
-        binder.enable()?
-    }
-
-    Ok(())
-}
-
-pub fn disable() -> Result<()> {
-    for binder in [&WND_PROC_BINDER] {
-        binder.disable()?;
-    }
-
-    Ok(())
-}
-
 pub fn hook_library() -> HookLibrary {
-    HookLibrary { enable, disable }
+    HookLibrary::new().with_binder(&WND_PROC_BINDER)
 }

@@ -5,10 +5,11 @@ mod rendering;
 
 use std::{thread, time::Duration};
 
-use crate::detouring::prelude::*;
+use anyhow::Context;
 use c_string::c_str;
 use lazy_static::lazy_static;
 use parking_lot::{Condvar, Mutex};
+use re_utilities::{module::Module, ThreadSuspender};
 
 pub use console::{MessageType, CONSOLE};
 
@@ -40,33 +41,36 @@ lazy_static! {
     static ref OPERATION_MUTEX: Mutex<()> = Mutex::new(());
 }
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     #[cfg(feature = "debug-console")]
     alloc_console();
 
-    let mut modules = Module::get_all();
-    let mut loaded_libraries = vec![];
+    let mut module = Module::get_all()
+        .find(|x| {
+            x.filename()
+                .unwrap_or_default()
+                .to_uppercase()
+                .contains(&"HITMAN3.EXE")
+        })
+        .context("Failed to find game module")?;
 
-    if let Some(module) = modules.iter_mut().find(|x| {
-        x.filename()
-            .unwrap_or_default()
-            .to_uppercase()
-            .contains(&"HITMAN3.EXE")
-    }) {
-        let _suspender = ThreadSuspender::new().expect("Failed to create thread suspender");
-        for hook_library in [
+    let mut loaded_libraries = ThreadSuspender::for_block(|| {
+        let mut hook_libraries = vec![
             rendering::hook_library(),
             game::zrender::hook_library(),
             game::zapplication_engine_win32::hook_library(),
-        ] {
-            if let Err(error) = (hook_library.enable)(module) {
-                println!("Failed to enable hook library: {error}");
-                break;
-            } else {
-                loaded_libraries.push(hook_library);
-            }
+        ];
+
+        for hook_library in &mut hook_libraries {
+            hook_library.init(&mut module)?;
         }
-    }
+
+        for hook_library in &mut hook_libraries {
+            hook_library.set_enabled(true)?;
+        }
+
+        Ok(hook_libraries)
+    })?;
 
     {
         let mut console = CONSOLE.lock().unwrap();
@@ -76,14 +80,12 @@ fn main() {
     OPERATION.notify_all();
     OPERATION.wait(&mut OPERATION_MUTEX.lock());
 
-    {
-        let _suspender = ThreadSuspender::new().expect("Failed to create thread suspender");
-        for hook_library in &loaded_libraries {
-            if let Err(error) = (hook_library.disable)() {
-                println!("Failed to disable hook library: {error}");
-            }
+    ThreadSuspender::for_block(|| {
+        for hook_library in &mut loaded_libraries {
+            hook_library.set_enabled(false)?;
         }
-    }
+        Ok(())
+    })?;
 
     #[cfg(feature = "debug-console")]
     println!("Delaying exit...");
@@ -92,12 +94,14 @@ fn main() {
     #[cfg(feature = "debug-console")]
     free_console();
     OPERATION.notify_all();
+
+    Ok(())
 }
 
 #[no_mangle]
 #[allow(clippy::missing_safety_doc)]
 pub unsafe extern "system" fn load(_: *mut u64, _: *mut u64) {
-    thread::spawn(main);
+    thread::spawn(|| main().unwrap());
     OPERATION.wait(&mut OPERATION_MUTEX.lock());
 }
 
